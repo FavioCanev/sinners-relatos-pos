@@ -1,0 +1,250 @@
+@page "/login"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IUsuarioService UsuarioService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Iniciar Sesión</PageTitle>
+
+<div class="login-wrap">
+    <h1 class="text-center mb-4">Sinners &amp; Relatos</h1>
+
+    @if (modo == ModoLogin.Ingreso)
+    {
+        <EditForm Model="formulario" OnValidSubmit="IngresarAsync" class="login-card">
+            <DataAnnotationsValidator />
+
+            @if (mensajeExito is not null)
+            {
+                <div class="alert alert-success py-2">@mensajeExito</div>
+            }
+            @if (mensajeError is not null)
+            {
+                <div class="alert alert-danger py-2">@mensajeError</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Usuario</label>
+                <InputText class="form-control" @bind-Value="formulario.NombreUsuario" autofocus />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Contraseña</label>
+                <InputText type="password" class="form-control" @bind-Value="formulario.Password" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" disabled="@ingresando">
+                @(ingresando ? "Ingresando..." : "Ingresar")
+            </button>
+
+            <button type="button" class="btn btn-link w-100 mt-1" @onclick="IrARecuperarUsuario">
+                ¿Olvidaste tu contraseña?
+            </button>
+        </EditForm>
+    }
+    else if (modo == ModoLogin.RecuperarUsuario)
+    {
+        <EditForm Model="formRecuperar" OnValidSubmit="BuscarPreguntaAsync" class="login-card">
+            <DataAnnotationsValidator />
+            <p class="text-muted small">Ingresa tu usuario para recuperar el acceso.</p>
+
+            @if (mensajeErrorRecuperacion is not null)
+            {
+                <div class="alert alert-danger py-2">@mensajeErrorRecuperacion</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Usuario</label>
+                <InputText class="form-control" @bind-Value="formRecuperar.NombreUsuario" autofocus />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" disabled="@buscando">
+                @(buscando ? "Buscando..." : "Continuar")
+            </button>
+            <button type="button" class="btn btn-link w-100 mt-1" @onclick="VolverAIngreso">
+                &larr; Volver a iniciar sesión
+            </button>
+        </EditForm>
+    }
+    else if (modo == ModoLogin.SinPregunta)
+    {
+        <div class="login-card">
+            <p>El usuario <strong>@nombreUsuarioRecuperando</strong> no tiene configurada una pregunta de seguridad.</p>
+            <p class="text-muted small">Pide a un administrador que restablezca tu contraseña desde "Usuarios y Empleados".</p>
+            <button type="button" class="btn btn-primary w-100" @onclick="VolverAIngreso">
+                &larr; Volver a iniciar sesión
+            </button>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="formRestablecer" OnValidSubmit="RestablecerAsync" class="login-card">
+            <DataAnnotationsValidator />
+            <p class="mb-1"><strong>@preguntaRecuperada</strong></p>
+
+            @if (mensajeErrorRecuperacion is not null)
+            {
+                <div class="alert alert-danger py-2">@mensajeErrorRecuperacion</div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Respuesta</label>
+                <InputText class="form-control" @bind-Value="formRestablecer.Respuesta" autofocus />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Nueva contraseña</label>
+                <InputText type="password" class="form-control" @bind-Value="formRestablecer.NuevaPassword" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Confirmar contraseña</label>
+                <InputText type="password" class="form-control" @bind-Value="formRestablecer.ConfirmarPassword" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" disabled="@restableciendo">
+                @(restableciendo ? "Restableciendo..." : "Restablecer contraseña")
+            </button>
+            <button type="button" class="btn btn-link w-100 mt-1" @onclick="VolverAIngreso">
+                &larr; Volver a iniciar sesión
+            </button>
+        </EditForm>
+    }
+</div>
+
+<style>
+    .login-wrap {
+        max-width: 380px;
+        margin: 3rem auto;
+        padding: 1rem;
+    }
+
+    .login-card {
+        background: var(--brand-bg-alt, #f7f5f3);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
+    private enum ModoLogin { Ingreso, RecuperarUsuario, SinPregunta, RecuperarPregunta }
+    private ModoLogin modo = ModoLogin.Ingreso;
+
+    private readonly FormularioLogin formulario = new();
+    private readonly FormularioRecuperarUsuario formRecuperar = new();
+    private readonly FormularioRestablecer formRestablecer = new();
+
+    private string? mensajeError;
+    private string? mensajeExito;
+    private string? mensajeErrorRecuperacion;
+    private string? preguntaRecuperada;
+    private string nombreUsuarioRecuperando = "";
+    private bool ingresando;
+    private bool buscando;
+    private bool restableciendo;
+
+    private async Task IngresarAsync()
+    {
+        ingresando = true;
+        mensajeError = null;
+
+        var usuario = await UsuarioService.ValidarCredencialesAsync(formulario.NombreUsuario, formulario.Password);
+        if (usuario is null)
+        {
+            mensajeError = "Usuario o contraseña incorrectos.";
+            ingresando = false;
+            return;
+        }
+
+        await SesionService.IniciarSesionAsync(usuario);
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/mesas" : ReturnUrl);
+    }
+
+    private void IrARecuperarUsuario()
+    {
+        modo = ModoLogin.RecuperarUsuario;
+        mensajeErrorRecuperacion = null;
+        mensajeExito = null;
+        formRecuperar.NombreUsuario = formulario.NombreUsuario;
+    }
+
+    private void VolverAIngreso()
+    {
+        modo = ModoLogin.Ingreso;
+        mensajeErrorRecuperacion = null;
+    }
+
+    private async Task BuscarPreguntaAsync()
+    {
+        buscando = true;
+        mensajeErrorRecuperacion = null;
+
+        var pregunta = await UsuarioService.ObtenerPreguntaSeguridadAsync(formRecuperar.NombreUsuario);
+        nombreUsuarioRecuperando = formRecuperar.NombreUsuario;
+        buscando = false;
+
+        if (pregunta is null)
+        {
+            modo = ModoLogin.SinPregunta;
+            return;
+        }
+
+        preguntaRecuperada = pregunta;
+        formRestablecer.Respuesta = "";
+        formRestablecer.NuevaPassword = "";
+        formRestablecer.ConfirmarPassword = "";
+        modo = ModoLogin.RecuperarPregunta;
+    }
+
+    private async Task RestablecerAsync()
+    {
+        restableciendo = true;
+        mensajeErrorRecuperacion = null;
+
+        var exito = await UsuarioService.RestablecerPasswordPorPreguntaAsync(
+            nombreUsuarioRecuperando, formRestablecer.Respuesta, formRestablecer.NuevaPassword);
+
+        restableciendo = false;
+
+        if (!exito)
+        {
+            mensajeErrorRecuperacion = "Respuesta incorrecta.";
+            return;
+        }
+
+        formulario.NombreUsuario = nombreUsuarioRecuperando;
+        mensajeExito = "Contraseña restablecida correctamente. Ya puedes iniciar sesión.";
+        modo = ModoLogin.Ingreso;
+    }
+
+    private class FormularioLogin
+    {
+        [Required(ErrorMessage = "Ingresa tu usuario")]
+        public string NombreUsuario { get; set; } = "";
+
+        [Required(ErrorMessage = "Ingresa tu contraseña")]
+        public string Password { get; set; } = "";
+    }
+
+    private class FormularioRecuperarUsuario
+    {
+        [Required(ErrorMessage = "Ingresa tu usuario")]
+        public string NombreUsuario { get; set; } = "";
+    }
+
+    private class FormularioRestablecer
+    {
+        [Required(ErrorMessage = "Ingresa tu respuesta")]
+        public string Respuesta { get; set; } = "";
+
+        [Required(ErrorMessage = "Ingresa tu nueva contraseña")]
+        [MinLength(4, ErrorMessage = "La contraseña debe tener al menos 4 caracteres")]
+        public string NuevaPassword { get; set; } = "";
+
+        [Required(ErrorMessage = "Confirma tu nueva contraseña")]
+        [Compare(nameof(NuevaPassword), ErrorMessage = "Las contraseñas no coinciden")]
+        public string ConfirmarPassword { get; set; } = "";
+    }
+}

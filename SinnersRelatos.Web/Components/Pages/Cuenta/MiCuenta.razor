@@ -1,0 +1,195 @@
+@page "/mi-cuenta"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IUsuarioService UsuarioService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Mi Cuenta</PageTitle>
+
+@if (usuarioActor is null)
+{
+    <p class="p-3"><em>Cargando...</em></p>
+}
+else
+{
+    <h1>Mi Cuenta</h1>
+    <p class="text-muted">@usuarioActor.NombreCompleto · @usuarioActor.Rol</p>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Cambiar mi contraseña</h5>
+
+                    @if (mensajeExitoPassword is not null)
+                    {
+                        <div class="alert alert-success py-2">@mensajeExitoPassword</div>
+                    }
+                    @if (mensajeErrorPassword is not null)
+                    {
+                        <div class="alert alert-danger py-2">@mensajeErrorPassword</div>
+                    }
+
+                    <EditForm Model="formPassword" OnValidSubmit="CambiarPasswordAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-2">
+                            <label class="form-label">Contraseña actual</label>
+                            <InputText type="password" class="form-control" @bind-Value="formPassword.PasswordActual" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Nueva contraseña</label>
+                            <InputText type="password" class="form-control" @bind-Value="formPassword.NuevaPassword" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirmar nueva contraseña</label>
+                            <InputText type="password" class="form-control" @bind-Value="formPassword.ConfirmarPassword" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" disabled="@cambiandoPassword">
+                            @(cambiandoPassword ? "Guardando..." : "Cambiar contraseña")
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Pregunta de seguridad</h5>
+                    <p class="text-muted small">
+                        Se usa para recuperar tu contraseña desde la pantalla de inicio de sesión si la olvidas.
+                        @(preguntaActual is not null ? $"Pregunta actual: \"{preguntaActual}\"." : "Todavía no tienes una configurada.")
+                    </p>
+
+                    @if (mensajeExitoPregunta is not null)
+                    {
+                        <div class="alert alert-success py-2">@mensajeExitoPregunta</div>
+                    }
+                    @if (mensajeErrorPregunta is not null)
+                    {
+                        <div class="alert alert-danger py-2">@mensajeErrorPregunta</div>
+                    }
+
+                    <EditForm Model="formPregunta" OnValidSubmit="ConfigurarPreguntaAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-2">
+                            <label class="form-label">Pregunta</label>
+                            <InputText class="form-control" @bind-Value="formPregunta.Pregunta" placeholder="Ej: ¿Cuál es el nombre de mi mascota?" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Respuesta</label>
+                            <InputText class="form-control" @bind-Value="formPregunta.Respuesta" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirmar respuesta</label>
+                            <InputText class="form-control" @bind-Value="formPregunta.ConfirmarRespuesta" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" disabled="@guardandoPregunta">
+                            @(guardandoPregunta ? "Guardando..." : "Guardar pregunta de seguridad")
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UsuarioSesion? usuarioActor;
+    private string? preguntaActual;
+
+    private readonly FormularioPassword formPassword = new();
+    private readonly FormularioPregunta formPregunta = new();
+
+    private bool cambiandoPassword;
+    private bool guardandoPregunta;
+    private string? mensajeErrorPassword;
+    private string? mensajeExitoPassword;
+    private string? mensajeErrorPregunta;
+    private string? mensajeExitoPregunta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/mi-cuenta");
+            return;
+        }
+
+        var usuario = await UsuarioService.ObtenerPorIdAsync(usuarioActor.Id);
+        preguntaActual = usuario?.PreguntaSeguridad;
+    }
+
+    private async Task CambiarPasswordAsync()
+    {
+        cambiandoPassword = true;
+        mensajeErrorPassword = null;
+        mensajeExitoPassword = null;
+
+        var exito = await UsuarioService.CambiarPasswordPropioAsync(
+            usuarioActor!.Id, formPassword.PasswordActual, formPassword.NuevaPassword);
+
+        cambiandoPassword = false;
+
+        if (!exito)
+        {
+            mensajeErrorPassword = "La contraseña actual no es correcta.";
+            return;
+        }
+
+        formPassword.PasswordActual = "";
+        formPassword.NuevaPassword = "";
+        formPassword.ConfirmarPassword = "";
+        mensajeExitoPassword = "Contraseña actualizada.";
+    }
+
+    private async Task ConfigurarPreguntaAsync()
+    {
+        guardandoPregunta = true;
+        mensajeErrorPregunta = null;
+        mensajeExitoPregunta = null;
+
+        await UsuarioService.ConfigurarPreguntaSeguridadAsync(usuarioActor!.Id, formPregunta.Pregunta, formPregunta.Respuesta);
+        preguntaActual = formPregunta.Pregunta;
+
+        guardandoPregunta = false;
+        formPregunta.Pregunta = "";
+        formPregunta.Respuesta = "";
+        formPregunta.ConfirmarRespuesta = "";
+        mensajeExitoPregunta = "Pregunta de seguridad guardada.";
+    }
+
+    private class FormularioPassword
+    {
+        [Required(ErrorMessage = "Ingresa tu contraseña actual")]
+        public string PasswordActual { get; set; } = "";
+
+        [Required(ErrorMessage = "Ingresa tu nueva contraseña")]
+        [MinLength(4, ErrorMessage = "La contraseña debe tener al menos 4 caracteres")]
+        public string NuevaPassword { get; set; } = "";
+
+        [Required(ErrorMessage = "Confirma tu nueva contraseña")]
+        [Compare(nameof(NuevaPassword), ErrorMessage = "Las contraseñas no coinciden")]
+        public string ConfirmarPassword { get; set; } = "";
+    }
+
+    private class FormularioPregunta
+    {
+        [Required(ErrorMessage = "Ingresa una pregunta")]
+        public string Pregunta { get; set; } = "";
+
+        [Required(ErrorMessage = "Ingresa una respuesta")]
+        public string Respuesta { get; set; } = "";
+
+        [Required(ErrorMessage = "Confirma tu respuesta")]
+        [Compare(nameof(Respuesta), ErrorMessage = "Las respuestas no coinciden")]
+        public string ConfirmarRespuesta { get; set; } = "";
+    }
+}

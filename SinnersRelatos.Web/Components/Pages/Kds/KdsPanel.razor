@@ -1,0 +1,238 @@
+@rendermode InteractiveServer
+@using SinnersRelatos.Web.Hubs
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IPedidoService PedidoService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="kds-panel" style="--kds-color: @Color">
+    <div class="kds-header">
+        <h1>@Titulo</h1>
+        <div class="d-flex align-items-center gap-3">
+            <label class="estacion-toggle">
+                <input type="checkbox" checked="@esEstacionImpresion" @onchange="ToggleEstacionImpresionAsync" />
+                🖨️ Impresora conectada aquí
+            </label>
+            <span class="kds-contador">@items.Count ítem(s) pendiente(s)</span>
+        </div>
+    </div>
+
+    @foreach (var solicitud in registroImpresiones)
+    {
+        <div class="kds-impresion">
+            <span>@(solicitud.Impresa ? "🖨️ Imprimiendo" : "ℹ️") comprobante de @solicitud.Solicitud.MesaEtiqueta @(solicitud.Impresa ? "..." : "(esta pantalla no tiene la impresora)")</span>
+            <button class="btn btn-sm btn-outline-light" @onclick="() => registroImpresiones.Remove(solicitud)">✕</button>
+        </div>
+    }
+
+    @if (cargando)
+    {
+        <p class="p-3"><em>Cargando...</em></p>
+    }
+    else if (Tickets.Count == 0)
+    {
+        <p class="kds-vacio">Sin pedidos pendientes 🎉</p>
+    }
+    else
+    {
+        <div class="kds-tickets">
+            @foreach (var ticket in Tickets)
+            {
+                <div class="kds-ticket">
+                    <div class="kds-ticket-header">@ticket.First().MesaEtiqueta</div>
+                    @foreach (var item in ticket)
+                    {
+                        <div class="kds-item">
+                            <div class="kds-item-info">
+                                <span class="kds-item-cantidad">@item.Cantidad x</span>
+                                <span class="kds-item-nombre">@item.ProductoNombre</span>
+                                @if (item.Modificadores.Count > 0)
+                                {
+                                    <div class="kds-item-mods">@string.Join(", ", item.Modificadores)</div>
+                                }
+                            </div>
+                            <button class="btn btn-sm btn-success" @onclick="() => MarcarEntregadoAsync(item.DetallePedidoId)">✓ Listo</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .kds-panel {
+        padding: 1rem;
+    }
+
+    .kds-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        border-bottom: 3px solid var(--kds-color);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .kds-header h1 {
+        color: var(--kds-color);
+        margin: 0;
+    }
+
+    .kds-vacio {
+        text-align: center;
+        font-size: 1.3rem;
+        color: #888;
+        margin-top: 3rem;
+    }
+
+    .kds-tickets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-content: flex-start;
+    }
+
+    .kds-ticket {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-top: 4px solid var(--kds-color);
+        border-radius: 0.5rem;
+        width: 260px;
+        padding: 0.75rem;
+    }
+
+    .kds-ticket-header {
+        font-weight: 700;
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .kds-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0;
+        border-bottom: 1px dashed #eee;
+    }
+
+    .kds-item:last-child {
+        border-bottom: none;
+    }
+
+    .kds-item-cantidad {
+        font-weight: 700;
+    }
+
+    .kds-item-mods {
+        font-size: 0.75rem;
+        color: #777;
+    }
+
+    .kds-impresion {
+        background: var(--kds-color);
+        color: #fff;
+        border-radius: 0.5rem;
+        padding: 0.6rem 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+        flex-wrap: wrap;
+    }
+
+    .estacion-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.82rem;
+        color: #666;
+        cursor: pointer;
+        user-select: none;
+    }
+</style>
+
+@code {
+    [Parameter, EditorRequired]
+    public DestinoPreparacion Destino { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Titulo { get; set; } = "";
+
+    [Parameter]
+    public string Color { get; set; } = "#650610";
+
+    private bool cargando = true;
+    private bool esEstacionImpresion;
+    private List<ItemKds> items = [];
+    private List<RegistroImpresion> registroImpresiones = [];
+    private DotNetObjectReference<KdsPanel>? referencia;
+
+    private List<IGrouping<int, ItemKds>> Tickets =>
+        items.GroupBy(i => i.PedidoId).OrderBy(g => g.Min(i => i.FechaCreacion)).ToList();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        referencia = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referencia, nameof(OnPedidoActualizado));
+        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.SolicitudImpresion, referencia, nameof(OnSolicitudImpresion));
+        esEstacionImpresion = await JS.InvokeAsync<bool>("comandaHub.esEstacionDeImpresion");
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnPedidoActualizado()
+    {
+        await CargarAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task OnSolicitudImpresion(SolicitudImpresion solicitud)
+    {
+        if (esEstacionImpresion)
+            await JS.InvokeVoidAsync("comandaHub.imprimirSilencioso", solicitud.PedidoId);
+
+        registroImpresiones.Add(new RegistroImpresion { Solicitud = solicitud, Impresa = esEstacionImpresion });
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleEstacionImpresionAsync(ChangeEventArgs e)
+    {
+        esEstacionImpresion = (bool)e.Value!;
+        await JS.InvokeVoidAsync("comandaHub.marcarEstacionDeImpresion", esEstacionImpresion);
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        items = await PedidoService.ListarParaKdsAsync(Destino);
+        cargando = false;
+    }
+
+    private async Task MarcarEntregadoAsync(int detallePedidoId)
+    {
+        await PedidoService.MarcarEntregadoAsync(detallePedidoId);
+        await CargarAsync();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        referencia?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    private class RegistroImpresion
+    {
+        public required SolicitudImpresion Solicitud { get; init; }
+        public bool Impresa { get; init; }
+    }
+}

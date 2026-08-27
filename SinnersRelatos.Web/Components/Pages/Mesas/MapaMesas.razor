@@ -1,0 +1,330 @@
+@page "/mesas/{MarcaTexto}"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IMesaService MesaService
+@inject IPedidoService PedidoService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Mesas - @NombreLocal</PageTitle>
+
+<div class="mapa-header">
+    <a href="/mesas" class="volver">&larr; Volver</a>
+    <h1>@NombreLocal</h1>
+    @if (!modoFusion)
+    {
+        <button class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ActivarModoFusion">Fusionar mesas</button>
+    }
+    else
+    {
+        <div class="ms-auto d-flex gap-1">
+            <button class="btn btn-sm btn-primary" disabled="@(mesasSeleccionadas.Count < 2)" @onclick="FusionarAsync">
+                Fusionar (@mesasSeleccionadas.Count)
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="CancelarFusion">Cancelar</button>
+        </div>
+    }
+</div>
+
+@if (modoFusion)
+{
+    <p class="px-3 mb-0 text-muted small">Toca 2 o más mesas para fusionarlas. La primera que toques será la cuenta principal.</p>
+}
+
+@if (mensajeError is not null)
+{
+    <div class="alert alert-danger mx-3 mt-2 py-2">
+        @mensajeError
+        <button type="button" class="btn-close float-end" @onclick="() => mensajeError = null"></button>
+    </div>
+}
+
+<div class="leyenda">
+    <span class="chip chip-libre">Libre</span>
+    <span class="chip chip-ocupada">Ocupada</span>
+</div>
+
+@if (cargando)
+{
+    <p><em>Cargando mapa...</em></p>
+}
+else if (marcaInvalida)
+{
+    <p class="text-danger">Local no reconocido.</p>
+}
+else
+{
+    <div class="mapa-scroll">
+        <svg viewBox="0 0 1000 550" class="mapa-svg" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="10" width="980" height="530" fill="none" stroke="#333" stroke-width="4" />
+
+            @foreach (var mesaEstado in mesas)
+            {
+                var rect = ObtenerRect(mesaEstado.Mesa);
+                if (rect is null)
+                {
+                    continue;
+                }
+
+                var (x, y, w, h) = rect.Value;
+                var etiqueta = mesaEstado.Mesa.Tipo == TipoMesa.Barra ? $"Barra {mesaEstado.Mesa.Numero}" : $"Mesa {mesaEstado.Mesa.Numero}";
+                var claseEstado = mesaEstado.Ocupada ? "mesa-ocupada" : "mesa-libre";
+                var ordenSeleccion = mesasSeleccionadas.IndexOf(mesaEstado.Mesa.Id);
+                var seleccionada = ordenSeleccion >= 0;
+
+                <g class="mesa-grupo @claseEstado @(seleccionada ? "mesa-seleccionada" : "")" @onclick="() => OnMesaClick(mesaEstado)">
+                    <rect x="@x" y="@y" width="@w" height="@h" rx="6" class="mesa-rect" />
+                    <text x="@(x + w / 2)" y="@(y + h / 2)" class="mesa-texto" text-anchor="middle" dominant-baseline="middle">@etiqueta</text>
+                    @if (seleccionada)
+                    {
+                        <g>
+                            <circle cx="@(x + w - 10)" cy="@(y + 10)" r="12" class="mesa-badge" />
+                            <text x="@(x + w - 10)" y="@(y + 10)" class="mesa-badge-texto" text-anchor="middle" dominant-baseline="middle">@(ordenSeleccion + 1)</text>
+                        </g>
+                    }
+                </g>
+            }
+        </svg>
+    </div>
+}
+
+<style>
+    .mapa-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem 1rem 0;
+    }
+
+    .mapa-header h1 {
+        font-size: 1.4rem;
+        margin: 0;
+    }
+
+    .volver {
+        color: var(--brand-primary);
+        text-decoration: none;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .leyenda {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem;
+    }
+
+    .chip {
+        border-radius: 1rem;
+        padding: 0.2rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .chip-libre {
+        background: #e8f5e9;
+        color: #1b5e20;
+        border: 1px solid #2e7d32;
+    }
+
+    .chip-ocupada {
+        background: var(--brand-primary);
+        color: #fff;
+    }
+
+    .mapa-scroll {
+        overflow-x: auto;
+        padding: 0.5rem;
+    }
+
+    .mapa-svg {
+        min-width: 700px;
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .mesa-grupo {
+        cursor: pointer;
+    }
+
+    .mesa-libre .mesa-rect {
+        fill: #e8f5e9;
+        stroke: #2e7d32;
+        stroke-width: 3;
+    }
+
+    .mesa-libre .mesa-texto {
+        fill: #1b5e20;
+    }
+
+    .mesa-ocupada .mesa-rect {
+        fill: var(--brand-primary);
+        stroke: var(--brand-primary-dark);
+        stroke-width: 3;
+    }
+
+    .mesa-ocupada .mesa-texto {
+        fill: #fff;
+    }
+
+    .mesa-texto {
+        font-size: 22px;
+        font-weight: 600;
+        pointer-events: none;
+    }
+
+    .mesa-grupo:active .mesa-rect {
+        opacity: 0.8;
+    }
+
+    .mesa-seleccionada .mesa-rect {
+        stroke: var(--brand-secondary);
+        stroke-width: 5;
+    }
+
+    .mesa-badge {
+        fill: var(--brand-secondary);
+        stroke: #fff;
+        stroke-width: 2;
+    }
+
+    .mesa-badge-texto {
+        fill: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        pointer-events: none;
+    }
+
+    /* En teléfonos en vertical, el mapa (dibujado en horizontal) se gira 90°
+       para aprovechar el alto de la pantalla y verlo completo sin hacer scroll. */
+    @@media (max-width: 700px) and (orientation: portrait) {
+        .mapa-scroll {
+            height: calc(100vh - 180px);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .mapa-svg {
+            min-width: 0;
+            width: min(154.5vw, calc(100vh - 180px));
+            height: auto;
+            transform: rotate(90deg);
+            transform-origin: center center;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string MarcaTexto { get; set; } = "";
+
+    private Marca marca;
+    private bool marcaInvalida;
+    private bool cargando = true;
+    private List<MesaEstado> mesas = [];
+    private UsuarioSesion? usuario;
+
+    private bool modoFusion;
+    private List<int> mesasSeleccionadas = [];
+    private string? mensajeError;
+
+    private string NombreLocal => marcaInvalida ? "" : marca.ToString();
+
+    private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutSinners = new()
+    {
+        [(TipoMesa.Mesa, 6)] = (70, 90, 90, 95),
+        [(TipoMesa.Mesa, 5)] = (280, 90, 90, 95),
+        [(TipoMesa.Barra, 1)] = (600, 90, 70, 55),
+        [(TipoMesa.Barra, 2)] = (675, 90, 70, 55),
+        [(TipoMesa.Barra, 3)] = (750, 90, 70, 55),
+        [(TipoMesa.Barra, 4)] = (825, 90, 70, 55),
+        [(TipoMesa.Barra, 5)] = (900, 145, 70, 60),
+        [(TipoMesa.Barra, 6)] = (900, 210, 70, 60),
+        [(TipoMesa.Mesa, 1)] = (560, 250, 85, 95),
+        [(TipoMesa.Mesa, 3)] = (720, 210, 90, 180),
+        [(TipoMesa.Mesa, 7)] = (70, 430, 90, 95),
+        [(TipoMesa.Mesa, 4)] = (280, 430, 90, 95),
+        [(TipoMesa.Mesa, 2)] = (500, 430, 90, 95),
+    };
+
+    private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutRelatos = new()
+    {
+        [(TipoMesa.Mesa, 1)] = (80, 90, 90, 95),
+        [(TipoMesa.Mesa, 2)] = (560, 90, 90, 95),
+        [(TipoMesa.Mesa, 3)] = (780, 90, 90, 95),
+        [(TipoMesa.Mesa, 5)] = (80, 350, 90, 95),
+        [(TipoMesa.Mesa, 6)] = (310, 350, 90, 95),
+        [(TipoMesa.Mesa, 7)] = (560, 350, 90, 95),
+        [(TipoMesa.Mesa, 4)] = (780, 350, 90, 95),
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        marcaInvalida = !Enum.TryParse(MarcaTexto, ignoreCase: true, out marca);
+        if (marcaInvalida)
+        {
+            cargando = false;
+            return;
+        }
+
+        cargando = true;
+        mesas = await MesaService.ListarPorMarcaAsync(marca);
+        usuario = await SesionService.ObtenerUsuarioActualAsync();
+        cargando = false;
+    }
+
+    private (double X, double Y, double W, double H)? ObtenerRect(Mesa mesa)
+    {
+        var layout = mesa.Marca == Marca.Sinners ? LayoutSinners : LayoutRelatos;
+        return layout.TryGetValue((mesa.Tipo, mesa.Numero), out var rect) ? rect : null;
+    }
+
+    private void OnMesaClick(MesaEstado mesaEstado)
+    {
+        if (!modoFusion)
+        {
+            Navigation.NavigateTo($"/pedido/mesa/{mesaEstado.Mesa.Id}");
+            return;
+        }
+
+        if (!mesasSeleccionadas.Remove(mesaEstado.Mesa.Id))
+            mesasSeleccionadas.Add(mesaEstado.Mesa.Id);
+    }
+
+    private void ActivarModoFusion()
+    {
+        modoFusion = true;
+        mesasSeleccionadas = [];
+        mensajeError = null;
+    }
+
+    private void CancelarFusion()
+    {
+        modoFusion = false;
+        mesasSeleccionadas = [];
+    }
+
+    private async Task FusionarAsync()
+    {
+        if (usuario is null)
+        {
+            Navigation.NavigateTo($"/login?returnUrl=/mesas/{MarcaTexto}");
+            return;
+        }
+
+        try
+        {
+            await PedidoService.FusionarAsync(mesasSeleccionadas, usuario.Id);
+            Navigation.NavigateTo($"/pedido/mesa/{mesasSeleccionadas[0]}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+}

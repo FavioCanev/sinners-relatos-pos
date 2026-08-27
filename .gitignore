@@ -1,0 +1,32 @@
+# Build results
+bin/
+obj/
+[Dd]ebug/
+[Dd]ebug[Ee]xe/
+[Rr]elease/
+[Rr]elease[Ee]xe/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# EF Core
+*.mdf
+*.ldf
+*.ndf
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code project state
+.claude/

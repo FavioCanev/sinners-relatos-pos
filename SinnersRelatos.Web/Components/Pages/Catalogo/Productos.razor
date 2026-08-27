@@ -1,0 +1,376 @@
+@page "/productos"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IProductoService ProductoService
+@inject ICategoriaService CategoriaService
+@inject IModificadorService ModificadorService
+@inject IIngredienteService IngredienteService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Productos</PageTitle>
+
+<h1>Productos</h1>
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-md-2">
+        <label class="form-label">Marca</label>
+        <select class="form-select" @bind="filtroMarcaTexto" @bind:after="CargarProductosAsync">
+            <option value="">Todas</option>
+            <option value="@Marca.Sinners">Sinners</option>
+            <option value="@Marca.Relatos">Relatos</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Categoría</label>
+        <select class="form-select" @bind="filtroCategoriaTexto" @bind:after="CargarProductosAsync">
+            <option value="">Todas</option>
+            @foreach (var categoria in categorias)
+            {
+                <option value="@categoria.Id">@categoria.Nombre</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Buscar</label>
+        <input class="form-control" placeholder="Nombre del producto" @bind="busqueda" @bind:event="oninput" />
+    </div>
+    <div class="col-md-2">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="incluirInactivos" @bind="incluirInactivos" @bind:after="CargarProductosAsync" />
+            <label class="form-check-label" for="incluirInactivos">Inactivos</label>
+        </div>
+    </div>
+    <div class="col-md-2 text-end">
+        <button class="btn btn-primary" @onclick="MostrarFormularioCreacion">+ Nuevo Producto</button>
+    </div>
+</div>
+
+@if (mensajeError is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        @mensajeError
+        <button type="button" class="btn-close" @onclick="() => mensajeError = null"></button>
+    </div>
+}
+
+@if (mostrandoFormulario)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">@(formulario.Id is null ? "Nuevo Producto" : "Editar Producto")</h5>
+            <EditForm Model="formulario" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre</label>
+                        <InputText class="form-control" @bind-Value="formulario.Nombre" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Precio (S/)</label>
+                        <InputNumber class="form-control" @bind-Value="formulario.Precio" step="0.01" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Marca</label>
+                        <InputSelect class="form-select" @bind-Value="formulario.Marca">
+                            <option value="@Marca.Sinners">Sinners</option>
+                            <option value="@Marca.Relatos">Relatos</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Categoría</label>
+                        <InputSelect class="form-select" @bind-Value="formulario.CategoriaId">
+                            @foreach (var categoria in categorias)
+                            {
+                                <option value="@categoria.Id">@categoria.Nombre</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Destino</label>
+                        <InputSelect class="form-select" @bind-Value="formulario.DestinoPreparacion">
+                            <option value="@DestinoPreparacion.Barra">Barra</option>
+                            <option value="@DestinoPreparacion.Cocina">Cocina</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Descripción</label>
+                        <InputTextArea class="form-control" @bind-Value="formulario.Descripcion" rows="2" />
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Grupos de modificadores</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            @foreach (var grupo in grupos)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="@($"grp{grupo.Id}")"
+                                           checked="@formulario.GrupoModificadorIds.Contains(grupo.Id)"
+                                           @onchange="e => ToggleGrupo(grupo.Id, (bool)e.Value!)" />
+                                    <label class="form-check-label" for="@($"grp{grupo.Id}")">@grupo.Nombre</label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <label class="form-label">Receta (ingredientes)</label>
+                        @if (ingredientes.Count == 0)
+                        {
+                            <p class="text-muted small">No hay ingredientes registrados todavía.</p>
+                        }
+                        @foreach (var linea in formulario.Receta)
+                        {
+                            <div class="row g-2 align-items-center mb-2">
+                                <div class="col-md-5">
+                                    <select class="form-select form-select-sm" @bind="linea.IngredienteId">
+                                        @foreach (var ingrediente in ingredientes)
+                                        {
+                                            <option value="@ingrediente.Id">@ingrediente.Nombre (@ingrediente.UnidadMedida)</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="number" step="0.001" class="form-control form-control-sm" placeholder="Cantidad" @bind="linea.Cantidad" />
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => formulario.Receta.Remove(linea)">Quitar</button>
+                                </div>
+                            </div>
+                        }
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AgregarLineaReceta" disabled="@(ingredientes.Count == 0)">+ Agregar Ingrediente</button>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => mostrandoFormulario = false">Cancelar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (productosFiltrados.Count == 0)
+{
+    <p><em>No se encontraron productos.</em></p>
+}
+else
+{
+    <p class="text-muted">@productosFiltrados.Count producto(s)</p>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Marca</th>
+                    <th>Destino</th>
+                    <th>Precio</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var producto in productosFiltrados)
+                {
+                    <tr>
+                        <td>@producto.Nombre</td>
+                        <td>@producto.Categoria.Nombre</td>
+                        <td>@producto.Marca</td>
+                        <td>@producto.DestinoPreparacion</td>
+                        <td>S/ @producto.Precio.ToString("0.00")</td>
+                        <td>
+                            @if (producto.Activo)
+                            {
+                                <span class="badge bg-success">Activo</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactivo</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => MostrarFormularioEdicionAsync(producto)">Editar</button>
+                            @if (producto.Activo)
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => CambiarEstadoAsync(producto, false)">Desactivar</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => CambiarEstadoAsync(producto, true)">Activar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Producto> productos = [];
+    private List<Categoria> categorias = [];
+    private List<GrupoModificador> grupos = [];
+    private List<Ingrediente> ingredientes = [];
+    private bool cargando = true;
+    private bool incluirInactivos;
+    private string filtroMarcaTexto = "";
+    private string filtroCategoriaTexto = "";
+    private string busqueda = "";
+    private bool mostrandoFormulario;
+    private string? mensajeError;
+    private FormularioProducto formulario = new();
+
+    private List<Producto> productosFiltrados =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? productos
+            : productos.Where(p => p.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private UsuarioSesion? usuarioActor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/productos");
+            return;
+        }
+        if (usuarioActor.Rol != RolUsuario.Administrador)
+        {
+            Navigation.NavigateTo("/mesas");
+            return;
+        }
+
+        categorias = await CategoriaService.ListarAsync(incluirInactivas: true);
+        grupos = await ModificadorService.ListarGruposAsync();
+        ingredientes = await IngredienteService.ListarAsync();
+        await CargarProductosAsync();
+    }
+
+    private async Task CargarProductosAsync()
+    {
+        cargando = true;
+        Marca? marca = Enum.TryParse<Marca>(filtroMarcaTexto, out var m) ? m : null;
+        int? categoriaId = int.TryParse(filtroCategoriaTexto, out var c) ? c : null;
+        productos = await ProductoService.ListarAsync(marca, categoriaId, incluirInactivos);
+        cargando = false;
+    }
+
+    private void MostrarFormularioCreacion()
+    {
+        formulario = new FormularioProducto { CategoriaId = categorias.FirstOrDefault()?.Id ?? 0 };
+        mensajeError = null;
+        mostrandoFormulario = true;
+    }
+
+    private async Task MostrarFormularioEdicionAsync(Producto producto)
+    {
+        var completo = await ProductoService.ObtenerPorIdAsync(producto.Id);
+        if (completo is null)
+            return;
+
+        formulario = new FormularioProducto
+        {
+            Id = completo.Id,
+            Nombre = completo.Nombre,
+            Descripcion = completo.Descripcion,
+            Precio = completo.Precio,
+            Marca = completo.Marca,
+            CategoriaId = completo.CategoriaId,
+            DestinoPreparacion = completo.DestinoPreparacion,
+            GrupoModificadorIds = completo.GruposModificadores.Select(g => g.GrupoModificadorId).ToHashSet(),
+            Receta = completo.Receta.Select(r => new LineaReceta { IngredienteId = r.IngredienteId, Cantidad = r.CantidadRequerida }).ToList()
+        };
+        mensajeError = null;
+        mostrandoFormulario = true;
+    }
+
+    private void ToggleGrupo(int grupoId, bool seleccionado)
+    {
+        if (seleccionado)
+            formulario.GrupoModificadorIds.Add(grupoId);
+        else
+            formulario.GrupoModificadorIds.Remove(grupoId);
+    }
+
+    private void AgregarLineaReceta()
+    {
+        var disponible = ingredientes.FirstOrDefault(i => formulario.Receta.All(l => l.IngredienteId != i.Id));
+        if (disponible is null)
+            return;
+
+        formulario.Receta.Add(new LineaReceta { IngredienteId = disponible.Id, Cantidad = 0 });
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            var producto = new Producto
+            {
+                Id = formulario.Id ?? 0,
+                Nombre = formulario.Nombre,
+                Descripcion = formulario.Descripcion,
+                Precio = formulario.Precio,
+                Marca = formulario.Marca,
+                CategoriaId = formulario.CategoriaId,
+                DestinoPreparacion = formulario.DestinoPreparacion
+            };
+
+            var receta = new Dictionary<int, decimal>();
+            foreach (var linea in formulario.Receta.Where(l => l.Cantidad > 0))
+                receta[linea.IngredienteId] = linea.Cantidad;
+
+            if (formulario.Id is null)
+                await ProductoService.CrearAsync(producto, formulario.GrupoModificadorIds, receta, usuarioActor!.Id);
+            else
+                await ProductoService.ActualizarAsync(producto, formulario.GrupoModificadorIds, receta, usuarioActor!.Id);
+
+            mostrandoFormulario = false;
+            mensajeError = null;
+            await CargarProductosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task CambiarEstadoAsync(Producto producto, bool activo)
+    {
+        await ProductoService.CambiarEstadoAsync(producto.Id, activo, usuarioActor!.Id);
+        await CargarProductosAsync();
+    }
+
+    private class FormularioProducto
+    {
+        public int? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es obligatorio")]
+        public string Nombre { get; set; } = "";
+
+        public string? Descripcion { get; set; }
+
+        [Range(0.01, 10000, ErrorMessage = "El precio debe ser mayor a 0")]
+        public decimal Precio { get; set; }
+
+        public Marca Marca { get; set; } = Marca.Sinners;
+        public int CategoriaId { get; set; }
+        public DestinoPreparacion DestinoPreparacion { get; set; } = DestinoPreparacion.Barra;
+        public HashSet<int> GrupoModificadorIds { get; set; } = [];
+        public List<LineaReceta> Receta { get; set; } = [];
+    }
+
+    private class LineaReceta
+    {
+        public int IngredienteId { get; set; }
+        public decimal Cantidad { get; set; }
+    }
+}

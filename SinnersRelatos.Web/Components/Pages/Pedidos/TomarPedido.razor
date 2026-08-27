@@ -1,0 +1,665 @@
+@page "/pedido/mesa/{MesaId:int}"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IMesaService MesaService
+@inject IProductoService ProductoService
+@inject IPedidoService PedidoService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Tomar Pedido</PageTitle>
+
+@if (cargando)
+{
+    <p class="p-3"><em>Cargando...</em></p>
+}
+else if (mesa is null)
+{
+    <p class="p-3 text-danger">Mesa no encontrada.</p>
+}
+else
+{
+    <div class="pedido-header">
+        <a href="/mesas/@mesa.Marca.ToString().ToLowerInvariant()" class="volver">&larr;</a>
+        <div>
+            <div class="mesa-titulo">@(mesa.Tipo == TipoMesa.Barra ? "Barra" : "Mesa") @mesa.Numero — @mesa.Marca</div>
+            <div class="mesero-nombre">@usuario?.NombreCompleto</div>
+        </div>
+        @if (confirmandoCierre)
+        {
+            <div class="ms-auto d-flex gap-1">
+                <span class="text-success small align-self-center">¿Cerrar cuenta y liberar la mesa?</span>
+                <button class="btn btn-sm btn-success" @onclick="CerrarCuentaAsync">Sí, cerrar</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmandoCierre = false">No</button>
+            </div>
+        }
+        else if (confirmandoAnulacion)
+        {
+            <div class="ms-auto d-flex gap-1">
+                <span class="text-danger small align-self-center">¿Seguro?</span>
+                <button class="btn btn-sm btn-danger" @onclick="AnularPedidoAsync">Sí, anular</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmandoAnulacion = false">No</button>
+            </div>
+        }
+        else
+        {
+            <div class="ms-auto d-flex gap-1">
+                <button class="btn btn-sm btn-success" @onclick="() => confirmandoCierre = true">Cerrar cuenta</button>
+                <button class="btn btn-sm btn-outline-danger" @onclick="() => confirmandoAnulacion = true">Anular pedido</button>
+            </div>
+        }
+    </div>
+
+    @if (yaConfirmados.Count > 0)
+    {
+        <div class="ya-pedido">
+            <strong>Ya en el pedido:</strong>
+            <ul class="mb-0">
+                @foreach (var d in yaConfirmados)
+                {
+                    <li>@d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")</li>
+                }
+            </ul>
+            <div class="d-flex gap-2 mt-2">
+                <a class="btn btn-sm btn-outline-secondary" href="/print/comprobante/@(pedido!.Id)?autoprint=false" target="_blank">🧾 Ver / Guardar PDF</a>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="SolicitarImpresionAsync" disabled="@solicitandoImpresion">
+                    🖨️ @(solicitandoImpresion ? "Enviando..." : "Imprimir en cocina/barra")
+                </button>
+            </div>
+            @if (impresionSolicitada)
+            {
+                <div class="text-success small mt-1">Solicitud enviada a las pantallas de cocina y barra.</div>
+            }
+        </div>
+    }
+
+    <div class="p-2">
+        <input class="form-control" placeholder="Buscar en el menú..." @bind="busqueda" @bind:event="oninput" />
+    </div>
+
+    @if (string.IsNullOrWhiteSpace(busqueda))
+    {
+        <div class="marca-tabs">
+            <button class="marca-tab @(marcaSeleccionada == Marca.Sinners ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Sinners)">Sinners</button>
+            <button class="marca-tab @(marcaSeleccionada == Marca.Relatos ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Relatos)">Relatos</button>
+        </div>
+
+        <div class="categoria-chips">
+            @foreach (var categoria in CategoriasDeMarca(marcaSeleccionada))
+            {
+                <button class="chip @(categoriaSeleccionadaId == categoria.Id ? "chip-activo" : "")" @onclick="() => categoriaSeleccionadaId = categoria.Id">
+                    @categoria.Nombre
+                </button>
+            }
+        </div>
+    }
+
+    @if (mensajeError is not null)
+    {
+        <div class="alert alert-danger mx-2 py-2">
+            @mensajeError
+            <button type="button" class="btn-close float-end" @onclick="() => mensajeError = null"></button>
+        </div>
+    }
+
+    <div class="productos-grid">
+        @foreach (var producto in ProductosVisibles)
+        {
+            var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
+            <button class="producto-card @(agotado ? "agotado" : "")" @onclick="() => OnProductoTap(producto)">
+                <span class="producto-nombre">@producto.Nombre</span>
+                <span class="producto-precio">S/ @producto.Precio.ToString("0.00")</span>
+                @if (!string.IsNullOrWhiteSpace(busqueda))
+                {
+                    <span class="producto-categoria">@producto.Categoria.Nombre · @producto.Marca</span>
+                }
+                @if (agotado)
+                {
+                    <span class="badge-agotado">Sin stock</span>
+                }
+            </button>
+        }
+    </div>
+
+    @if (carrito.Count > 0)
+    {
+        <div class="carrito-barra" @onclick="() => mostrandoCarrito = true">
+            <span>@carrito.Sum(l => l.Cantidad) ítem(s) · S/ @carrito.Sum(l => l.Subtotal).ToString("0.00")</span>
+            <span>Ver carrito &rarr;</span>
+        </div>
+    }
+
+    @if (mostrandoCarrito)
+    {
+        <div class="overlay" @onclick="() => mostrandoCarrito = false">
+            <div class="panel-carrito" @onclick:stopPropagation="true">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0">Carrito</h5>
+                    <button class="btn-close" @onclick="() => mostrandoCarrito = false"></button>
+                </div>
+
+                @if (carrito.Count == 0)
+                {
+                    <p class="text-muted">El carrito está vacío.</p>
+                }
+                else
+                {
+                    @foreach (var linea in carrito)
+                    {
+                        <div class="linea-carrito">
+                            <div class="flex-grow-1">
+                                <div>@linea.Producto.Nombre @(linea.ForzarVenta ? "⚠" : "")</div>
+                                @if (linea.OpcionesSeleccionadas.Count > 0)
+                                {
+                                    <small class="text-muted">@string.Join(", ", linea.OpcionesSeleccionadas.Select(o => o.Nombre))</small>
+                                }
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => CambiarCantidad(linea, -1)">-</button>
+                                <span>@linea.Cantidad</span>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => CambiarCantidad(linea, 1)">+</button>
+                            </div>
+                            <div class="text-end" style="min-width: 70px;">S/ @linea.Subtotal.ToString("0.00")</div>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => carrito.Remove(linea)">✕</button>
+                        </div>
+                    }
+
+                    <div class="d-flex justify-content-between mt-3 mb-2">
+                        <strong>Total</strong>
+                        <strong>S/ @carrito.Sum(l => l.Subtotal).ToString("0.00")</strong>
+                    </div>
+
+                    <button class="btn btn-primary w-100" @onclick="ConfirmarPedidoAsync" disabled="@confirmando">
+                        @(confirmando ? "Confirmando..." : "Confirmar Pedido")
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    @if (productoModal is not null)
+    {
+        <div class="overlay" @onclick="CerrarModal">
+            <div class="panel-modal" @onclick:stopPropagation="true">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0">@productoModal.Nombre</h5>
+                    <button class="btn-close" @onclick="CerrarModal"></button>
+                </div>
+
+                @if (mensajeErrorModal is not null)
+                {
+                    <div class="alert alert-danger py-2">@mensajeErrorModal</div>
+                }
+
+                @if (agotadoModal)
+                {
+                    <div class="alert alert-warning py-2">
+                        Sin stock suficiente para preparar este producto.
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" id="forzarVenta" @bind="forzarVentaModal" />
+                            <label class="form-check-label" for="forzarVenta">Forzar venta de todas formas</label>
+                        </div>
+                    </div>
+                }
+
+                @foreach (var vinculo in productoModal.GruposModificadores)
+                {
+                    var grupo = vinculo.GrupoModificador;
+                    <div class="mb-3">
+                        <div class="fw-semibold">@grupo.Nombre @(grupo.EsObligatorio ? "*" : "")</div>
+                        @foreach (var opcion in grupo.Opciones.Where(o => o.Activo))
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="@(grupo.PermiteMultiple ? "checkbox" : "radio")"
+                                       name="@($"grupo{grupo.Id}")"
+                                       id="@($"opcion{opcion.Id}")"
+                                       checked="@opcionesSeleccionadasModal.Contains(opcion.Id)"
+                                       @onclick="() => ToggleOpcionModal(grupo, opcion)" />
+                                <label class="form-check-label" for="@($"opcion{opcion.Id}")">
+                                    @opcion.Nombre @(opcion.PrecioAdicional > 0 ? $"(+S/ {opcion.PrecioAdicional:0.00})" : "")
+                                </label>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <span>Cantidad</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => cantidadModal = Math.Max(1, cantidadModal - 1)">-</button>
+                    <span>@cantidadModal</span>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => cantidadModal++">+</button>
+                </div>
+
+                <button class="btn btn-primary w-100" @onclick="ConfirmarModal">Agregar al carrito</button>
+            </div>
+        </div>
+    }
+}
+
+<style>
+    .pedido-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #e5e5e5;
+    }
+
+    .volver {
+        font-size: 1.5rem;
+        text-decoration: none;
+        color: var(--brand-primary);
+    }
+
+    .mesa-titulo {
+        font-weight: 700;
+    }
+
+    .mesero-nombre {
+        font-size: 0.8rem;
+        color: #777;
+    }
+
+    .ya-pedido {
+        margin: 0.5rem 1rem;
+        padding: 0.5rem 0.75rem;
+        background: #f7f5f3;
+        border-radius: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .marca-tabs {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0 1rem;
+    }
+
+    .marca-tab {
+        flex: 1;
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.5rem;
+        background: #eee;
+        font-weight: 600;
+    }
+
+    .marca-tab.activa {
+        background: var(--brand-primary);
+        color: #fff;
+    }
+
+    .categoria-chips {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding: 0.75rem 1rem;
+    }
+
+    .chip {
+        white-space: nowrap;
+        border: 1px solid var(--brand-secondary);
+        border-radius: 1rem;
+        padding: 0.3rem 0.9rem;
+        background: #fff;
+        color: var(--brand-secondary-dark);
+        font-size: 0.85rem;
+    }
+
+    .chip-activo {
+        background: var(--brand-secondary);
+        color: #fff;
+    }
+
+    .productos-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.6rem;
+        padding: 0.5rem 1rem 5rem;
+    }
+
+    @@media (min-width: 700px) {
+        .productos-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    .producto-card {
+        border: 1px solid #ddd;
+        border-radius: 0.6rem;
+        padding: 0.75rem;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        text-align: left;
+        position: relative;
+        min-height: 80px;
+    }
+
+    .producto-card.agotado {
+        opacity: 0.6;
+    }
+
+    .producto-nombre {
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .producto-precio {
+        color: var(--brand-primary);
+        font-weight: 600;
+    }
+
+    .producto-categoria {
+        font-size: 0.7rem;
+        color: #888;
+    }
+
+    .badge-agotado {
+        position: absolute;
+        top: 0.4rem;
+        right: 0.4rem;
+        background: #b71c1c;
+        color: #fff;
+        font-size: 0.65rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 0.4rem;
+    }
+
+    .carrito-barra {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--brand-primary);
+        color: #fff;
+        padding: 0.9rem 1.2rem;
+        display: flex;
+        justify-content: space-between;
+        font-weight: 600;
+        cursor: pointer;
+        z-index: 10;
+    }
+
+    .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: flex-end;
+        z-index: 20;
+    }
+
+    .panel-carrito, .panel-modal {
+        background: #fff;
+        width: 100%;
+        max-height: 85vh;
+        overflow-y: auto;
+        border-radius: 1rem 1rem 0 0;
+        padding: 1rem;
+    }
+
+    @@media (min-width: 700px) {
+        .overlay {
+            align-items: center;
+            justify-content: center;
+        }
+
+        .panel-carrito, .panel-modal {
+            max-width: 480px;
+            border-radius: 1rem;
+        }
+    }
+
+    .linea-carrito {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int MesaId { get; set; }
+
+    private bool cargando = true;
+    private Mesa? mesa;
+    private UsuarioSesion? usuario;
+    private Pedido? pedido;
+    private List<DetallePedido> yaConfirmados = [];
+    private List<Producto> productos = [];
+    private Dictionary<int, bool> disponibilidad = [];
+
+    private string busqueda = "";
+    private Marca marcaSeleccionada = Marca.Sinners;
+    private int? categoriaSeleccionadaId;
+    private string? mensajeError;
+    private bool confirmandoAnulacion;
+    private bool confirmandoCierre;
+    private bool solicitandoImpresion;
+    private bool impresionSolicitada;
+
+    private List<LineaCarrito> carrito = [];
+    private bool mostrandoCarrito;
+    private bool confirmando;
+
+    private Producto? productoModal;
+    private HashSet<int> opcionesSeleccionadasModal = [];
+    private bool forzarVentaModal;
+    private int cantidadModal = 1;
+    private string? mensajeErrorModal;
+    private bool agotadoModal => productoModal is not null && disponibilidad.TryGetValue(productoModal.Id, out var disp) && !disp;
+
+    private IEnumerable<Producto> ProductosVisibles =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? productos.Where(p => p.Marca == marcaSeleccionada && (categoriaSeleccionadaId == null || p.CategoriaId == categoriaSeleccionadaId))
+            : productos.Where(p => p.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase));
+
+    private List<Categoria> CategoriasDeMarca(Marca marca) =>
+        productos.Where(p => p.Marca == marca).Select(p => p.Categoria).DistinctBy(c => c.Id).OrderBy(c => c.Nombre).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var usuarioSesion = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioSesion is null)
+        {
+            Navigation.NavigateTo($"/login?returnUrl=/pedido/mesa/{MesaId}");
+            return;
+        }
+        usuario = usuarioSesion;
+
+        mesa = await MesaService.ObtenerPorIdAsync(MesaId);
+        if (mesa is null)
+        {
+            cargando = false;
+            return;
+        }
+
+        marcaSeleccionada = mesa.Marca;
+
+        pedido = await PedidoService.ObtenerOCrearPedidoAsync(MesaId, usuario.Id);
+        await CargarDetallePedidoAsync();
+
+        productos = await ProductoService.ListarAsync();
+        disponibilidad = await PedidoService.VerificarDisponibilidadAsync(productos.Select(p => p.Id));
+        categoriaSeleccionadaId = CategoriasDeMarca(marcaSeleccionada).FirstOrDefault()?.Id;
+
+        cargando = false;
+    }
+
+    private async Task CargarDetallePedidoAsync()
+    {
+        if (pedido is null)
+            return;
+
+        var completo = await PedidoService.ObtenerConDetalleAsync(pedido.Id);
+        yaConfirmados = completo?.Detalles.ToList() ?? [];
+    }
+
+    private void SeleccionarMarca(Marca marca)
+    {
+        marcaSeleccionada = marca;
+        categoriaSeleccionadaId = CategoriasDeMarca(marca).FirstOrDefault()?.Id;
+    }
+
+    private void OnProductoTap(Producto producto)
+    {
+        var tieneModificadores = producto.GruposModificadores.Count > 0;
+        var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
+
+        if (tieneModificadores || agotado)
+        {
+            productoModal = producto;
+            opcionesSeleccionadasModal = [];
+            forzarVentaModal = false;
+            cantidadModal = 1;
+            mensajeErrorModal = null;
+        }
+        else
+        {
+            AgregarAlCarrito(producto, [], false, 1);
+        }
+    }
+
+    private void CerrarModal() => productoModal = null;
+
+    private void ToggleOpcionModal(GrupoModificador grupo, OpcionModificador opcion)
+    {
+        if (!grupo.PermiteMultiple)
+        {
+            foreach (var o in grupo.Opciones)
+                opcionesSeleccionadasModal.Remove(o.Id);
+
+            opcionesSeleccionadasModal.Add(opcion.Id);
+            return;
+        }
+
+        if (!opcionesSeleccionadasModal.Add(opcion.Id))
+            opcionesSeleccionadasModal.Remove(opcion.Id);
+    }
+
+    private void ConfirmarModal()
+    {
+        if (productoModal is null)
+            return;
+
+        foreach (var vinculo in productoModal.GruposModificadores)
+        {
+            var grupo = vinculo.GrupoModificador;
+            if (grupo.EsObligatorio && !grupo.Opciones.Any(o => opcionesSeleccionadasModal.Contains(o.Id)))
+            {
+                mensajeErrorModal = $"Selecciona una opción de '{grupo.Nombre}'.";
+                return;
+            }
+        }
+
+        if (agotadoModal && !forzarVentaModal)
+        {
+            mensajeErrorModal = "Marca 'Forzar venta' para agregar este producto sin stock suficiente.";
+            return;
+        }
+
+        var opciones = productoModal.GruposModificadores
+            .SelectMany(g => g.GrupoModificador.Opciones)
+            .Where(o => opcionesSeleccionadasModal.Contains(o.Id))
+            .ToList();
+
+        AgregarAlCarrito(productoModal, opciones, agotadoModal && forzarVentaModal, cantidadModal);
+        CerrarModal();
+    }
+
+    private void AgregarAlCarrito(Producto producto, List<OpcionModificador> opciones, bool forzar, int cantidad)
+    {
+        var opcionIds = opciones.Select(o => o.Id).OrderBy(x => x).ToList();
+        var existente = carrito.FirstOrDefault(l => l.Producto.Id == producto.Id
+            && l.ForzarVenta == forzar
+            && l.OpcionesSeleccionadas.Select(o => o.Id).OrderBy(x => x).SequenceEqual(opcionIds));
+
+        if (existente is not null)
+            existente.Cantidad += cantidad;
+        else
+            carrito.Add(new LineaCarrito { Producto = producto, OpcionesSeleccionadas = opciones, ForzarVenta = forzar, Cantidad = cantidad });
+    }
+
+    private void CambiarCantidad(LineaCarrito linea, int delta)
+    {
+        linea.Cantidad += delta;
+        if (linea.Cantidad <= 0)
+            carrito.Remove(linea);
+    }
+
+    private async Task ConfirmarPedidoAsync()
+    {
+        if (pedido is null || carrito.Count == 0)
+            return;
+
+        confirmando = true;
+        try
+        {
+            var items = carrito.Select(l => new ItemCarrito
+            {
+                ProductoId = l.Producto.Id,
+                Cantidad = l.Cantidad,
+                OpcionModificadorIds = l.OpcionesSeleccionadas.Select(o => o.Id).ToList(),
+                ForzarVenta = l.ForzarVenta
+            });
+
+            await PedidoService.ConfirmarItemsAsync(pedido.Id, items, usuario!.Id);
+            carrito.Clear();
+            mostrandoCarrito = false;
+            mensajeError = null;
+
+            await CargarDetallePedidoAsync();
+            disponibilidad = await PedidoService.VerificarDisponibilidadAsync(productos.Select(p => p.Id));
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            confirmando = false;
+        }
+    }
+
+    private async Task AnularPedidoAsync()
+    {
+        if (pedido is null)
+            return;
+
+        await PedidoService.AnularAsync(pedido.Id, usuario!.Id);
+        Navigation.NavigateTo($"/mesas/{mesa!.Marca.ToString().ToLowerInvariant()}");
+    }
+
+    private async Task CerrarCuentaAsync()
+    {
+        if (pedido is null)
+            return;
+
+        await PedidoService.CerrarAsync(pedido.Id, usuario!.Id);
+        Navigation.NavigateTo($"/mesas/{mesa!.Marca.ToString().ToLowerInvariant()}");
+    }
+
+    private async Task SolicitarImpresionAsync()
+    {
+        if (pedido is null)
+            return;
+
+        solicitandoImpresion = true;
+        await PedidoService.SolicitarImpresionAsync(pedido.Id);
+        solicitandoImpresion = false;
+        impresionSolicitada = true;
+    }
+
+    private class LineaCarrito
+    {
+        public required Producto Producto { get; init; }
+        public int Cantidad { get; set; } = 1;
+        public List<OpcionModificador> OpcionesSeleccionadas { get; set; } = [];
+        public bool ForzarVenta { get; set; }
+        public decimal Subtotal => Cantidad * (Producto.Precio + OpcionesSeleccionadas.Sum(o => o.PrecioAdicional));
+    }
+}

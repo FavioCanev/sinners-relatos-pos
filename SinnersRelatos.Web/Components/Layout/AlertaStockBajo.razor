@@ -1,0 +1,51 @@
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using Microsoft.Extensions.DependencyInjection
+@using SinnersRelatos.Web.Hubs
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IServiceScopeFactory ScopeFactory
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (cantidad > 0)
+{
+    <span class="badge bg-warning text-dark ms-1">⚠ @cantidad</span>
+}
+
+@code {
+    private int cantidad;
+    private DotNetObjectReference<AlertaStockBajo>? referencia;
+
+    protected override async Task OnInitializedAsync() => await RecalcularAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        referencia = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.AlertaStockActualizada, referencia, nameof(OnAlertaStockActualizada));
+    }
+
+    [JSInvokable]
+    public async Task OnAlertaStockActualizada()
+    {
+        await RecalcularAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RecalcularAsync()
+    {
+        // Runs in its own DI scope: this component renders alongside the page's own
+        // scoped AppDbContext, and EF Core's DbContext cannot handle concurrent operations.
+        using var scope = ScopeFactory.CreateScope();
+        var ingredienteService = scope.ServiceProvider.GetRequiredService<IIngredienteService>();
+        var bajoStock = await ingredienteService.ListarBajoStockAsync();
+        cantidad = bajoStock.Count;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        referencia?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

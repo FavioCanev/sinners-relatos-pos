@@ -1,0 +1,185 @@
+@page "/categorias"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject ICategoriaService CategoriaService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Categorías</PageTitle>
+
+<h1>Categorías</h1>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="incluirInactivas" @bind="incluirInactivas" @bind:after="CargarAsync" />
+        <label class="form-check-label" for="incluirInactivas">Mostrar inactivas</label>
+    </div>
+    <button class="btn btn-primary" @onclick="MostrarFormularioCreacion">+ Nueva Categoría</button>
+</div>
+
+@if (mensajeError is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        @mensajeError
+        <button type="button" class="btn-close" @onclick="() => mensajeError = null"></button>
+    </div>
+}
+
+@if (mostrandoFormulario)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">@(formulario.Id is null ? "Nueva Categoría" : "Editar Categoría")</h5>
+            <EditForm Model="formulario" OnValidSubmit="GuardarAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre</label>
+                        <InputText class="form-control" @bind-Value="formulario.Nombre" />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => mostrandoFormulario = false">Cancelar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (categorias.Count == 0)
+{
+    <p><em>No hay categorías registradas.</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var categoria in categorias)
+                {
+                    <tr>
+                        <td>@categoria.Nombre</td>
+                        <td>
+                            @if (categoria.Activo)
+                            {
+                                <span class="badge bg-success">Activa</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactiva</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => MostrarFormularioEdicion(categoria)">Editar</button>
+                            @if (categoria.Activo)
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => CambiarEstadoAsync(categoria, false)">Desactivar</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-success" @onclick="() => CambiarEstadoAsync(categoria, true)">Activar</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Categoria> categorias = [];
+    private bool cargando = true;
+    private bool incluirInactivas;
+    private bool mostrandoFormulario;
+    private string? mensajeError;
+    private FormularioCategoria formulario = new();
+
+    private UsuarioSesion? usuarioActor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/categorias");
+            return;
+        }
+        if (usuarioActor.Rol != RolUsuario.Administrador)
+        {
+            Navigation.NavigateTo("/mesas");
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        categorias = await CategoriaService.ListarAsync(incluirInactivas);
+        cargando = false;
+    }
+
+    private void MostrarFormularioCreacion()
+    {
+        formulario = new FormularioCategoria();
+        mensajeError = null;
+        mostrandoFormulario = true;
+    }
+
+    private void MostrarFormularioEdicion(Categoria categoria)
+    {
+        formulario = new FormularioCategoria { Id = categoria.Id, Nombre = categoria.Nombre };
+        mensajeError = null;
+        mostrandoFormulario = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        try
+        {
+            if (formulario.Id is null)
+                await CategoriaService.CrearAsync(formulario.Nombre, usuarioActor!.Id);
+            else
+                await CategoriaService.ActualizarAsync(formulario.Id.Value, formulario.Nombre, usuarioActor!.Id);
+
+            mostrandoFormulario = false;
+            mensajeError = null;
+            await CargarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task CambiarEstadoAsync(Categoria categoria, bool activo)
+    {
+        await CategoriaService.CambiarEstadoAsync(categoria.Id, activo, usuarioActor!.Id);
+        await CargarAsync();
+    }
+
+    private class FormularioCategoria
+    {
+        public int? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es obligatorio")]
+        public string Nombre { get; set; } = "";
+    }
+}

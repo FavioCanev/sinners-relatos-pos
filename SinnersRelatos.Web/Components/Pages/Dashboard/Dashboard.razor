@@ -1,0 +1,213 @@
+@page "/dashboard"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IDashboardService DashboardService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Dashboard</PageTitle>
+
+<div class="dashboard-wide">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
+        <h1 class="mb-0">Dashboard de Ventas</h1>
+        <div class="d-flex gap-2 align-items-end">
+            <div>
+                <label class="form-label mb-0">Desde</label>
+                <input type="date" class="form-control" @bind="desde" @bind:after="CargarAsync" />
+            </div>
+            <div>
+                <label class="form-label mb-0">Hasta</label>
+                <input type="date" class="form-control" @bind="hasta" @bind:after="CargarAsync" />
+            </div>
+        </div>
+    </div>
+
+    @if (cargando)
+    {
+        <p><em>Cargando...</em></p>
+    }
+    else if (resumen is null)
+    {
+        <p><em>No se pudo cargar la información.</em></p>
+    }
+    else
+    {
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <span class="stat-label">Total Ventas</span>
+                    <span class="stat-value">S/ @resumen.TotalVentas.ToString("N2")</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <span class="stat-label">Pedidos</span>
+                    <span class="stat-value">@resumen.CantidadPedidos</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card">
+                    <span class="stat-label">Ticket Promedio</span>
+                    <span class="stat-value">S/ @resumen.TicketPromedio.ToString("N2")</span>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card @(resumen.IngredientesBajoStock > 0 ? "stat-card-alerta" : "")">
+                    <span class="stat-label">Ingredientes Bajo Stock</span>
+                    <span class="stat-value">@resumen.IngredientesBajoStock</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-lg-8">
+                <div class="chart-card">
+                    <h5>Ventas por día</h5>
+                    <div class="chart-wrap">
+                        <canvas id="chartVentasPorDia"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="chart-card h-100">
+                    <h5>Ventas por marca</h5>
+                    @foreach (var v in resumen.VentasPorMarca)
+                    {
+                        <div class="marca-row">
+                            <span>@v.Marca</span>
+                            <strong>S/ @v.Total.ToString("N2")</strong>
+                        </div>
+                    }
+                    @if (resumen.VentasPorMarca.Count == 0)
+                    {
+                        <p class="text-muted"><em>Sin datos en el rango seleccionado.</em></p>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-12">
+                <div class="chart-card">
+                    <h5>Productos más pedidos</h5>
+                    <div class="chart-wrap chart-wrap-barras">
+                        <canvas id="chartTopProductos"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .dashboard-wide {
+        max-width: 1400px;
+    }
+
+    .stat-card {
+        background: var(--brand-bg-alt, #f7f2ea);
+        border-radius: 0.5rem;
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        border-left: 4px solid var(--brand-primary, #650610);
+    }
+
+    .stat-card-alerta {
+        border-left-color: #b8863b;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .stat-value {
+        font-size: 1.6rem;
+        font-weight: 700;
+    }
+
+    .chart-card {
+        background: #fff;
+        border: 1px solid #e5e0d8;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+
+    .chart-wrap {
+        position: relative;
+        height: 280px;
+    }
+
+    .chart-wrap-barras {
+        height: 320px;
+    }
+
+    .marca-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #eee;
+    }
+</style>
+
+@code {
+    private ResumenVentas? resumen;
+    private bool cargando = true;
+    private DateTime desde = DateTime.Today.AddDays(-6);
+    private DateTime hasta = DateTime.Today;
+    private bool datosListosParaRenderizar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/dashboard");
+            return;
+        }
+        if (usuarioActor.Rol != RolUsuario.Administrador)
+        {
+            Navigation.NavigateTo("/mesas");
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        StateHasChanged();
+
+        var hastaInclusive = hasta.Date.AddDays(1).AddTicks(-1);
+        resumen = await DashboardService.ObtenerResumenAsync(desde.Date, hastaInclusive);
+        cargando = false;
+        datosListosParaRenderizar = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (datosListosParaRenderizar && resumen is not null)
+        {
+            datosListosParaRenderizar = false;
+            await RenderizarGraficosAsync();
+        }
+    }
+
+    private async Task RenderizarGraficosAsync()
+    {
+        if (resumen is null) return;
+
+        var etiquetasDias = resumen.VentasPorDia.Select(v => v.Fecha.ToString("dd/MM")).ToArray();
+        var totalesDias = resumen.VentasPorDia.Select(v => v.Total).ToArray();
+        await JS.InvokeVoidAsync("dashboardCharts.renderLinea", "chartVentasPorDia", etiquetasDias, totalesDias, "#650610");
+
+        var etiquetasProductos = resumen.TopProductos.Select(p => $"{p.Nombre} ({p.Marca})").ToArray();
+        var cantidadesProductos = resumen.TopProductos.Select(p => p.CantidadVendida).ToArray();
+        await JS.InvokeVoidAsync("dashboardCharts.renderBarras", "chartTopProductos", etiquetasProductos, cantidadesProductos, "#b8863b");
+    }
+}

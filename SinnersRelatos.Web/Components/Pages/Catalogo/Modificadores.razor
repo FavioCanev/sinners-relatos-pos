@@ -1,0 +1,319 @@
+@page "/modificadores"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IModificadorService ModificadorService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Modificadores</PageTitle>
+
+<h1>Grupos de Modificadores</h1>
+
+<div class="d-flex justify-content-end mb-3">
+    <button class="btn btn-primary" @onclick="MostrarFormularioGrupoCreacion">+ Nuevo Grupo</button>
+</div>
+
+@if (mensajeError is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        @mensajeError
+        <button type="button" class="btn-close" @onclick="() => mensajeError = null"></button>
+    </div>
+}
+
+@if (mostrandoFormularioGrupo)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">@(formularioGrupo.Id is null ? "Nuevo Grupo" : "Editar Grupo")</h5>
+            <EditForm Model="formularioGrupo" OnValidSubmit="GuardarGrupoAsync">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre</label>
+                        <InputText class="form-control" @bind-Value="formularioGrupo.Nombre" />
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" id="esObligatorio" @bind-Value="formularioGrupo.EsObligatorio" />
+                            <label class="form-check-label" for="esObligatorio">Es obligatorio</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" id="permiteMultiple" @bind-Value="formularioGrupo.PermiteMultiple" />
+                            <label class="form-check-label" for="permiteMultiple">Permite múltiple</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="() => mostrandoFormularioGrupo = false">Cancelar</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (grupos.Count == 0)
+{
+    <p><em>No hay grupos de modificadores registrados.</em></p>
+}
+else
+{
+    @foreach (var grupo in grupos)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">@grupo.Nombre</h5>
+                        <small class="text-muted">
+                            @(grupo.EsObligatorio ? "Obligatorio" : "Opcional") ·
+                            @(grupo.PermiteMultiple ? "Selección múltiple" : "Selección única")
+                        </small>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => MostrarFormularioGrupoEdicion(grupo)">Editar</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => EliminarGrupoAsync(grupo.Id)">Eliminar</button>
+                    </div>
+                </div>
+
+                <table class="table table-sm mt-3">
+                    <thead>
+                        <tr>
+                            <th>Opción</th>
+                            <th>Precio adicional</th>
+                            <th>Estado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var opcion in grupo.Opciones)
+                        {
+                            @if (opcionEditandoId == opcion.Id)
+                            {
+                                <tr>
+                                    <td><input class="form-control form-control-sm" @bind="formularioOpcion.Nombre" /></td>
+                                    <td><input type="number" step="0.01" class="form-control form-control-sm" @bind="formularioOpcion.PrecioAdicional" /></td>
+                                    <td colspan="2">
+                                        <button class="btn btn-sm btn-primary" @onclick="() => GuardarOpcionEditadaAsync(grupo.Id)">Guardar</button>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => opcionEditandoId = null">Cancelar</button>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td>@opcion.Nombre</td>
+                                    <td>S/ @opcion.PrecioAdicional.ToString("0.00")</td>
+                                    <td>
+                                        @if (opcion.Activo)
+                                        {
+                                            <span class="badge bg-success">Activa</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">Inactiva</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => EmpezarEdicionOpcion(opcion)">Editar</button>
+                                        @if (opcion.Activo)
+                                        {
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => CambiarEstadoOpcionAsync(opcion.Id, false, grupo.Id)">Desactivar</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-outline-success" @onclick="() => CambiarEstadoOpcionAsync(opcion.Id, true, grupo.Id)">Activar</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+
+                @if (grupoAgregandoOpcionId == grupo.Id)
+                {
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <input class="form-control form-control-sm" placeholder="Nombre de la opción" @bind="formularioNuevaOpcion.Nombre" />
+                        </div>
+                        <div class="col-md-3">
+                            <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Precio adicional" @bind="formularioNuevaOpcion.PrecioAdicional" />
+                        </div>
+                        <div class="col-md-5">
+                            <button class="btn btn-sm btn-primary" @onclick="() => AgregarOpcionAsync(grupo.Id)">Agregar</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => grupoAgregandoOpcionId = null">Cancelar</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="() => MostrarFormularioNuevaOpcion(grupo.Id)">+ Agregar Opción</button>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<GrupoModificador> grupos = [];
+    private bool cargando = true;
+    private string? mensajeError;
+
+    private bool mostrandoFormularioGrupo;
+    private FormularioGrupo formularioGrupo = new();
+
+    private int? grupoAgregandoOpcionId;
+    private FormularioOpcion formularioNuevaOpcion = new();
+
+    private int? opcionEditandoId;
+    private FormularioOpcion formularioOpcion = new();
+
+    private UsuarioSesion? usuarioActor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/modificadores");
+            return;
+        }
+        if (usuarioActor.Rol != RolUsuario.Administrador)
+        {
+            Navigation.NavigateTo("/mesas");
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        grupos = await ModificadorService.ListarGruposAsync();
+        cargando = false;
+    }
+
+    private void MostrarFormularioGrupoCreacion()
+    {
+        formularioGrupo = new FormularioGrupo();
+        mensajeError = null;
+        mostrandoFormularioGrupo = true;
+    }
+
+    private void MostrarFormularioGrupoEdicion(GrupoModificador grupo)
+    {
+        formularioGrupo = new FormularioGrupo
+        {
+            Id = grupo.Id,
+            Nombre = grupo.Nombre,
+            EsObligatorio = grupo.EsObligatorio,
+            PermiteMultiple = grupo.PermiteMultiple
+        };
+        mensajeError = null;
+        mostrandoFormularioGrupo = true;
+    }
+
+    private async Task GuardarGrupoAsync()
+    {
+        try
+        {
+            if (formularioGrupo.Id is null)
+                await ModificadorService.CrearGrupoAsync(formularioGrupo.Nombre, formularioGrupo.EsObligatorio, formularioGrupo.PermiteMultiple, usuarioActor!.Id);
+            else
+                await ModificadorService.ActualizarGrupoAsync(formularioGrupo.Id.Value, formularioGrupo.Nombre, formularioGrupo.EsObligatorio, formularioGrupo.PermiteMultiple, usuarioActor!.Id);
+
+            mostrandoFormularioGrupo = false;
+            mensajeError = null;
+            await CargarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task EliminarGrupoAsync(int grupoId)
+    {
+        try
+        {
+            await ModificadorService.EliminarGrupoAsync(grupoId, usuarioActor!.Id);
+            mensajeError = null;
+            await CargarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private void MostrarFormularioNuevaOpcion(int grupoId)
+    {
+        formularioNuevaOpcion = new FormularioOpcion();
+        grupoAgregandoOpcionId = grupoId;
+    }
+
+    private async Task AgregarOpcionAsync(int grupoId)
+    {
+        if (string.IsNullOrWhiteSpace(formularioNuevaOpcion.Nombre))
+        {
+            mensajeError = "El nombre de la opción es obligatorio.";
+            return;
+        }
+
+        await ModificadorService.AgregarOpcionAsync(grupoId, formularioNuevaOpcion.Nombre, formularioNuevaOpcion.PrecioAdicional, usuarioActor!.Id);
+        grupoAgregandoOpcionId = null;
+        mensajeError = null;
+        await CargarAsync();
+    }
+
+    private void EmpezarEdicionOpcion(OpcionModificador opcion)
+    {
+        formularioOpcion = new FormularioOpcion { Nombre = opcion.Nombre, PrecioAdicional = opcion.PrecioAdicional };
+        opcionEditandoId = opcion.Id;
+    }
+
+    private async Task GuardarOpcionEditadaAsync(int grupoId)
+    {
+        if (opcionEditandoId is null)
+            return;
+
+        await ModificadorService.ActualizarOpcionAsync(opcionEditandoId.Value, formularioOpcion.Nombre, formularioOpcion.PrecioAdicional, usuarioActor!.Id);
+        opcionEditandoId = null;
+        await CargarAsync();
+    }
+
+    private async Task CambiarEstadoOpcionAsync(int opcionId, bool activo, int grupoId)
+    {
+        await ModificadorService.CambiarEstadoOpcionAsync(opcionId, activo, usuarioActor!.Id);
+        await CargarAsync();
+    }
+
+    private class FormularioGrupo
+    {
+        public int? Id { get; set; }
+
+        [Required(ErrorMessage = "El nombre es obligatorio")]
+        public string Nombre { get; set; } = "";
+
+        public bool EsObligatorio { get; set; }
+        public bool PermiteMultiple { get; set; }
+    }
+
+    private class FormularioOpcion
+    {
+        public string Nombre { get; set; } = "";
+        public decimal PrecioAdicional { get; set; }
+    }
+}
