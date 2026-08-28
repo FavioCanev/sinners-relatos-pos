@@ -8,7 +8,10 @@ namespace SinnersRelatos.Web.Services;
 public class ModificadorService(AppDbContext context, IAuditoriaService auditoria) : IModificadorService
 {
     public async Task<List<GrupoModificador>> ListarGruposAsync() =>
-        await context.GruposModificadores.Include(g => g.Opciones).OrderBy(g => g.Nombre).ToListAsync();
+        await context.GruposModificadores
+            .Include(g => g.Opciones).ThenInclude(o => o.Recetas).ThenInclude(r => r.Ingrediente)
+            .OrderBy(g => g.Nombre)
+            .ToListAsync();
 
     public async Task<GrupoModificador?> ObtenerGrupoPorIdAsync(int id) =>
         await context.GruposModificadores.Include(g => g.Opciones).FirstOrDefaultAsync(g => g.Id == id);
@@ -91,5 +94,53 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
         await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.CambiarEstadoOpcionModificador,
             $"{(activo ? "Activó" : "Desactivó")} la opción '{opcion.Nombre}'.");
+    }
+
+    public async Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int actorUsuarioId)
+    {
+        var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
+            ?? throw new InvalidOperationException($"Opción {opcionId} no encontrada.");
+        var ingrediente = await context.Ingredientes.FindAsync(ingredienteId)
+            ?? throw new InvalidOperationException($"Ingrediente {ingredienteId} no encontrado.");
+
+        var receta = await context.RecetasOpcionModificador
+            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId);
+
+        if (receta is null)
+        {
+            context.RecetasOpcionModificador.Add(new RecetaOpcionModificador
+            {
+                OpcionModificadorId = opcionId,
+                IngredienteId = ingredienteId,
+                CantidadRequerida = cantidadRequerida
+            });
+        }
+        else
+        {
+            receta.CantidadRequerida = cantidadRequerida;
+        }
+
+        await context.SaveChangesAsync();
+
+        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.AsignarRecetaOpcionModificador,
+            $"Asignó {cantidadRequerida} {ingrediente.UnidadMedida} de '{ingrediente.Nombre}' a la opción '{opcion.Nombre}'.");
+    }
+
+    public async Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int actorUsuarioId)
+    {
+        var receta = await context.RecetasOpcionModificador
+            .Include(r => r.Ingrediente)
+            .Include(r => r.OpcionModificador)
+            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId)
+            ?? throw new InvalidOperationException("La receta no existe.");
+
+        var nombreIngrediente = receta.Ingrediente.Nombre;
+        var nombreOpcion = receta.OpcionModificador.Nombre;
+
+        context.RecetasOpcionModificador.Remove(receta);
+        await context.SaveChangesAsync();
+
+        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.QuitarRecetaOpcionModificador,
+            $"Quitó '{nombreIngrediente}' de la opción '{nombreOpcion}'.");
     }
 }

@@ -27,6 +27,8 @@ public static class TiposAccionAuditoria
     public const string CrearOpcionModificador = "Crear opción modificador";
     public const string ActualizarOpcionModificador = "Actualizar opción modificador";
     public const string CambiarEstadoOpcionModificador = "Cambiar estado de opción modificador";
+    public const string AsignarRecetaOpcionModificador = "Asignar ingrediente a opción de modificador";
+    public const string QuitarRecetaOpcionModificador = "Quitar ingrediente de opción de modificador";
 
     public const string CrearIngrediente = "Crear ingrediente";
     public const string ActualizarIngrediente = "Actualizar ingrediente";

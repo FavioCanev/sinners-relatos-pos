@@ -52,7 +52,7 @@
                                     <div class="kds-item-mods">@string.Join(", ", item.Modificadores)</div>
                                 }
                             </div>
-                            <button class="btn btn-sm btn-success" @onclick="() => MarcarEntregadoAsync(item.DetallePedidoId)">✓ Listo</button>
+                            <button class="btn btn-sm btn-success" @onclick="() => MarcarListoAsync(item.DetallePedidoId)">✓ Listo</button>
                         </div>
                     }
                 </div>
@@ -218,9 +218,9 @@
         cargando = false;
     }
 
-    private async Task MarcarEntregadoAsync(int detallePedidoId)
+    private async Task MarcarListoAsync(int detallePedidoId)
     {
-        await PedidoService.MarcarEntregadoAsync(detallePedidoId);
+        await PedidoService.MarcarListoAsync(detallePedidoId);
         await CargarAsync();
     }
 

@@ -29,6 +29,7 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task<Pedido?> ObtenerConDetalleAsync(int pedidoId) =>
         await context.Pedidos
+            .AsNoTracking()
             .Include(p => p.Usuario)
             .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
             .Include(p => p.Detalles).ThenInclude(d => d.Producto)
@@ -48,6 +49,19 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
             id => recetas.Where(r => r.ProductoId == id).All(r => r.Ingrediente.StockActual >= r.CantidadRequerida));
     }
 
+    public async Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(IEnumerable<int> opcionIds)
+    {
+        var ids = opcionIds.ToList();
+        var recetas = await context.RecetasOpcionModificador
+            .Include(r => r.Ingrediente)
+            .Where(r => ids.Contains(r.OpcionModificadorId))
+            .ToListAsync();
+
+        return ids.ToDictionary(
+            id => id,
+            id => recetas.Where(r => r.OpcionModificadorId == id).All(r => r.Ingrediente.StockActual >= r.CantidadRequerida));
+    }
+
     public async Task ConfirmarItemsAsync(int pedidoId, IEnumerable<ItemCarrito> items, int actorUsuarioId)
     {
         var pedido = await context.Pedidos.FindAsync(pedidoId)
@@ -64,11 +78,30 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
                 .FirstOrDefaultAsync(p => p.Id == item.ProductoId)
                 ?? throw new InvalidOperationException($"Producto {item.ProductoId} no encontrado.");
 
+            var opciones = await context.OpcionesModificadores
+                .Include(o => o.Recetas).ThenInclude(r => r.Ingrediente)
+                .Where(o => item.OpcionModificadorIds.Contains(o.Id))
+                .ToListAsync();
+
             if (!item.ForzarVenta)
             {
                 var faltante = producto.Receta.FirstOrDefault(r => r.Ingrediente.StockActual < r.CantidadRequerida * item.Cantidad);
                 if (faltante is not null)
                     throw new InvalidOperationException($"Stock insuficiente de '{faltante.Ingrediente.Nombre}' para '{producto.Nombre}'.");
+
+                RecetaOpcionModificador? faltanteOpcion = null;
+                OpcionModificador? opcionConFaltante = null;
+                foreach (var opcion in opciones)
+                {
+                    faltanteOpcion = opcion.Recetas.FirstOrDefault(r => r.Ingrediente.StockActual < r.CantidadRequerida * item.Cantidad);
+                    if (faltanteOpcion is not null)
+                    {
+                        opcionConFaltante = opcion;
+                        break;
+                    }
+                }
+                if (faltanteOpcion is not null)
+                    throw new InvalidOperationException($"Stock insuficiente de '{faltanteOpcion.Ingrediente.Nombre}' para la opción '{opcionConFaltante!.Nombre}' de '{producto.Nombre}'.");
             }
             else
             {
@@ -89,7 +122,7 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
             foreach (var opcionId in item.OpcionModificadorIds)
             {
-                var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
+                var opcion = opciones.FirstOrDefault(o => o.Id == opcionId)
                     ?? throw new InvalidOperationException($"Opción de modificador {opcionId} no encontrada.");
 
                 context.DetallesPedidoModificadores.Add(new DetallePedidoModificador
@@ -104,6 +137,15 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
             {
                 receta.Ingrediente.StockActual -= receta.CantidadRequerida * item.Cantidad;
                 huboDeduccion = true;
+            }
+
+            foreach (var opcion in opciones)
+            {
+                foreach (var receta in opcion.Recetas)
+                {
+                    receta.Ingrediente.StockActual -= receta.CantidadRequerida * item.Cantidad;
+                    huboDeduccion = true;
+                }
             }
         }
 
@@ -227,12 +269,12 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
         }).ToList();
     }
 
-    public async Task MarcarEntregadoAsync(int detallePedidoId)
+    public async Task MarcarListoAsync(int detallePedidoId)
     {
         var detalle = await context.DetallesPedido.FindAsync(detallePedidoId)
             ?? throw new InvalidOperationException($"Ítem {detallePedidoId} no encontrado.");
 
-        detalle.Estado = EstadoDetallePedido.Entregado;
+        detalle.Estado = EstadoDetallePedido.Listo;
         await context.SaveChangesAsync();
 
         await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);

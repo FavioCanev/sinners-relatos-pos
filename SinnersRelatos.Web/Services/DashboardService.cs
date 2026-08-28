@@ -17,7 +17,7 @@ public class DashboardService(AppDbContext context) : IDashboardService
             .ToListAsync();
 
         var ingredientesBajoStock = await context.Ingredientes
-            .CountAsync(i => i.Activo && i.StockActual <= i.StockMinimo);
+            .CountAsync(i => i.Activo && i.StockMinimo > 0 && i.StockActual <= i.StockMinimo);
 
         decimal TotalDetalle(DetallePedido d) =>
             d.Cantidad * (d.PrecioUnitario + d.Modificadores.Sum(m => m.PrecioAdicional));
@@ -61,5 +61,35 @@ public class DashboardService(AppDbContext context) : IDashboardService
             TopProductos = topProductos,
             VentasPorMarca = ventasPorMarca
         };
+    }
+
+    public async Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync()
+    {
+        var productos = await context.Productos
+            .Where(p => p.Activo && p.Receta.Any())
+            .Include(p => p.Categoria)
+            .Include(p => p.Receta).ThenInclude(r => r.Ingrediente)
+            .ToListAsync();
+
+        return productos
+            .Select(p => new
+            {
+                p.Nombre,
+                p.Marca,
+                Categoria = p.Categoria.Nombre,
+                Disponible = p.Receta.Min(r => (int)Math.Floor(r.Ingrediente.StockActual / r.CantidadRequerida))
+            })
+            .GroupBy(p => new { p.Categoria, p.Marca })
+            .Select(g => new CategoriaStock
+            {
+                CategoriaNombre = g.Key.Categoria,
+                Marca = g.Key.Marca,
+                Productos = g.Select(p => new StockProducto { Nombre = p.Nombre, CantidadDisponible = p.Disponible })
+                    .OrderBy(p => p.Nombre)
+                    .ToList()
+            })
+            .OrderBy(c => c.Marca)
+            .ThenBy(c => c.CategoriaNombre)
+            .ToList();
     }
 }

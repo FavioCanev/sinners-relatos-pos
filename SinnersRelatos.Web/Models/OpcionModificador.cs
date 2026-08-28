@@ -9,4 +9,6 @@ public class OpcionModificador
 
     public int GrupoModificadorId { get; set; }
     public GrupoModificador GrupoModificador { get; set; } = null!;
+
+    public ICollection<RecetaOpcionModificador> Recetas { get; set; } = [];
 }

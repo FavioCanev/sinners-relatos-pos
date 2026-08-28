@@ -17,18 +17,22 @@ public class MesaService(AppDbContext context) : IMesaService
 
         var pedidosActivosPorMesa = await context.PedidosMesas
             .Where(pm => pm.Mesa.Marca == marca && pm.Pedido.Estado == EstadoPedido.Pendiente)
-            .Select(pm => new { pm.MesaId, pm.PedidoId })
+            .Select(pm => new { pm.MesaId, pm.PedidoId, TieneItems = pm.Pedido.Detalles.Any() })
             .ToListAsync();
 
         var mapaPedidos = pedidosActivosPorMesa
             .GroupBy(x => x.MesaId)
-            .ToDictionary(g => g.Key, g => g.First().PedidoId);
+            .ToDictionary(g => g.Key, g => g.First());
 
-        return mesas.Select(m => new MesaEstado
+        return mesas.Select(m =>
         {
-            Mesa = m,
-            Ocupada = mapaPedidos.ContainsKey(m.Id),
-            PedidoId = mapaPedidos.GetValueOrDefault(m.Id)
+            mapaPedidos.TryGetValue(m.Id, out var info);
+            return new MesaEstado
+            {
+                Mesa = m,
+                Ocupada = info?.TieneItems ?? false,
+                PedidoId = info?.PedidoId
+            };
         }).ToList();
     }
 

@@ -56,7 +56,7 @@ else if (marcaInvalida)
 else
 {
     <div class="mapa-scroll">
-        <svg viewBox="0 0 1000 550" class="mapa-svg" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 1000 550" class="mapa-svg @(marca == Marca.Sinners ? "mapa-svg-sinners" : "")" xmlns="http://www.w3.org/2000/svg">
             <rect x="10" y="10" width="980" height="530" fill="none" stroke="#333" stroke-width="4" />
 
             @foreach (var mesaEstado in mesas)
@@ -123,9 +123,9 @@ else
     }
 
     .chip-libre {
-        background: #e8f5e9;
-        color: #1b5e20;
-        border: 1px solid #2e7d32;
+        background: #f9eef0;
+        color: var(--brand-primary);
+        border: 1px solid #c9a3a9;
     }
 
     .chip-ocupada {
@@ -150,13 +150,13 @@ else
     }
 
     .mesa-libre .mesa-rect {
-        fill: #e8f5e9;
-        stroke: #2e7d32;
+        fill: #f9eef0;
+        stroke: #c9a3a9;
         stroke-width: 3;
     }
 
     .mesa-libre .mesa-texto {
-        fill: #1b5e20;
+        fill: var(--brand-primary);
     }
 
     .mesa-ocupada .mesa-rect {
@@ -211,10 +211,18 @@ else
 
         .mapa-svg {
             min-width: 0;
-            width: min(154.5vw, calc(100vh - 180px));
+            max-width: none;
+            flex-shrink: 0;
+            width: min(calc((100vw - 3rem) * 1.69), calc(100vh - 180px));
             height: auto;
             transform: rotate(90deg);
             transform-origin: center center;
+        }
+
+        /* El mapa de Sinners va girado 180° adicionales (270° en total) para que
+           quede en el sentido correcto según la disposición física del local. */
+        .mapa-svg-sinners {
+            transform: rotate(270deg);
         }
     }
 </style>
@@ -235,32 +243,35 @@ else
 
     private string NombreLocal => marcaInvalida ? "" : marca.ToString();
 
+    // Las mesas (tipo "Mesa") crecieron 20% respecto al tamaño original, centradas en el mismo punto.
+    // Los asientos de barra se dejaron en su tamaño original: están a solo 5px unos de otros y agrandarlos los solaparía.
     private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutSinners = new()
     {
-        [(TipoMesa.Mesa, 6)] = (70, 90, 90, 95),
-        [(TipoMesa.Mesa, 5)] = (280, 90, 90, 95),
+        [(TipoMesa.Mesa, 6)] = (61, 80.5, 108, 114),
+        [(TipoMesa.Mesa, 5)] = (271, 80.5, 108, 114),
         [(TipoMesa.Barra, 1)] = (600, 90, 70, 55),
         [(TipoMesa.Barra, 2)] = (675, 90, 70, 55),
         [(TipoMesa.Barra, 3)] = (750, 90, 70, 55),
         [(TipoMesa.Barra, 4)] = (825, 90, 70, 55),
         [(TipoMesa.Barra, 5)] = (900, 145, 70, 60),
         [(TipoMesa.Barra, 6)] = (900, 210, 70, 60),
-        [(TipoMesa.Mesa, 1)] = (560, 250, 85, 95),
-        [(TipoMesa.Mesa, 3)] = (720, 210, 90, 180),
-        [(TipoMesa.Mesa, 7)] = (70, 430, 90, 95),
-        [(TipoMesa.Mesa, 4)] = (280, 430, 90, 95),
-        [(TipoMesa.Mesa, 2)] = (500, 430, 90, 95),
+        [(TipoMesa.Mesa, 1)] = (551.5, 240.5, 102, 114),
+        [(TipoMesa.Mesa, 3)] = (711, 192, 108, 216),
+        [(TipoMesa.Mesa, 7)] = (61, 420.5, 108, 114),
+        [(TipoMesa.Mesa, 4)] = (271, 420.5, 108, 114),
+        [(TipoMesa.Mesa, 2)] = (491, 420.5, 108, 114),
     };
 
+    // Mesas 20% más grandes que el original, centradas en el mismo punto (aquí sí hay espacio de sobra).
     private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutRelatos = new()
     {
-        [(TipoMesa.Mesa, 1)] = (80, 90, 90, 95),
-        [(TipoMesa.Mesa, 2)] = (560, 90, 90, 95),
-        [(TipoMesa.Mesa, 3)] = (780, 90, 90, 95),
-        [(TipoMesa.Mesa, 5)] = (80, 350, 90, 95),
-        [(TipoMesa.Mesa, 6)] = (310, 350, 90, 95),
-        [(TipoMesa.Mesa, 7)] = (560, 350, 90, 95),
-        [(TipoMesa.Mesa, 4)] = (780, 350, 90, 95),
+        [(TipoMesa.Mesa, 1)] = (71, 80.5, 108, 114),
+        [(TipoMesa.Mesa, 2)] = (551, 80.5, 108, 114),
+        [(TipoMesa.Mesa, 3)] = (771, 80.5, 108, 114),
+        [(TipoMesa.Mesa, 5)] = (71, 340.5, 108, 114),
+        [(TipoMesa.Mesa, 6)] = (301, 340.5, 108, 114),
+        [(TipoMesa.Mesa, 7)] = (551, 340.5, 108, 114),
+        [(TipoMesa.Mesa, 4)] = (771, 340.5, 108, 114),
     };
 
     protected override async Task OnParametersSetAsync()

@@ -33,7 +33,21 @@ public class VentaPorMarca
     public decimal Total { get; set; }
 }
 
+public class StockProducto
+{
+    public required string Nombre { get; set; }
+    public int CantidadDisponible { get; set; }
+}
+
+public class CategoriaStock
+{
+    public required string CategoriaNombre { get; set; }
+    public Marca Marca { get; set; }
+    public List<StockProducto> Productos { get; set; } = [];
+}
+
 public interface IDashboardService
 {
     Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta);
+    Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync();
 }
