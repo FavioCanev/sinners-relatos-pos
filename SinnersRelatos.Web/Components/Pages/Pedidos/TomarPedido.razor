@@ -1,5 +1,6 @@
 @page "/pedido/mesa/{MesaId:int}"
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Hubs
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IMesaService MesaService
@@ -7,6 +8,8 @@
 @inject IPedidoService PedidoService
 @inject ISesionService SesionService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Tomar Pedido</PageTitle>
 
@@ -58,7 +61,13 @@ else
             <ul class="mb-0">
                 @foreach (var d in yaConfirmados)
                 {
-                    <li>@d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")</li>
+                    <li class="@(d.Estado == EstadoDetallePedido.Listo ? "item-listo" : "")">
+                        @d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")
+                        @if (d.Estado == EstadoDetallePedido.Listo)
+                        {
+                            <span class="badge-listo">✅ Listo para recoger</span>
+                        }
+                    </li>
                 }
             </ul>
             <div class="d-flex gap-2 mt-2">
@@ -218,6 +227,10 @@ else
                                        @onclick="() => ToggleOpcionModal(grupo, opcion)" />
                                 <label class="form-check-label" for="@($"opcion{opcion.Id}")">
                                     @opcion.Nombre @(opcion.PrecioAdicional > 0 ? $"(+S/ {opcion.PrecioAdicional:0.00})" : "")
+                                    @if (disponibilidadOpciones.TryGetValue(opcion.Id, out var dispOpcion) && !dispOpcion)
+                                    {
+                                        <span class="badge-agotado-opcion">Sin stock</span>
+                                    }
                                 </label>
                             </div>
                         }
@@ -267,6 +280,22 @@ else
         background: #f7f5f3;
         border-radius: 0.5rem;
         font-size: 0.9rem;
+    }
+
+    .item-listo {
+        color: #1b5e20;
+    }
+
+    .badge-listo {
+        display: inline-block;
+        margin-left: 0.5rem;
+        background: #e8f5e9;
+        color: #1b5e20;
+        border: 1px solid #2e7d32;
+        border-radius: 1rem;
+        padding: 0.05rem 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 600;
     }
 
     .marca-tabs {
@@ -358,8 +387,18 @@ else
 
     .badge-agotado {
         position: absolute;
-        top: 0.4rem;
+        bottom: 0.4rem;
         right: 0.4rem;
+        background: #b71c1c;
+        color: #fff;
+        font-size: 0.65rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 0.4rem;
+    }
+
+    .badge-agotado-opcion {
+        display: inline-block;
+        margin-left: 0.35rem;
         background: #b71c1c;
         color: #fff;
         font-size: 0.65rem;
@@ -451,7 +490,12 @@ else
     private bool forzarVentaModal;
     private int cantidadModal = 1;
     private string? mensajeErrorModal;
-    private bool agotadoModal => productoModal is not null && disponibilidad.TryGetValue(productoModal.Id, out var disp) && !disp;
+    private Dictionary<int, bool> disponibilidadOpciones = [];
+    private bool agotadoModal => productoModal is not null && (
+        (disponibilidad.TryGetValue(productoModal.Id, out var disp) && !disp) ||
+        opcionesSeleccionadasModal.Any(id => disponibilidadOpciones.TryGetValue(id, out var dispOpcion) && !dispOpcion));
+
+    private DotNetObjectReference<TomarPedido>? referenciaHub;
 
     private IEnumerable<Producto> ProductosVisibles =>
         string.IsNullOrWhiteSpace(busqueda)
@@ -485,9 +529,31 @@ else
 
         productos = await ProductoService.ListarAsync();
         disponibilidad = await PedidoService.VerificarDisponibilidadAsync(productos.Select(p => p.Id));
+
+        var opcionIds = productos
+            .SelectMany(p => p.GruposModificadores.SelectMany(g => g.GrupoModificador.Opciones.Select(o => o.Id)))
+            .Distinct();
+        disponibilidadOpciones = await PedidoService.VerificarDisponibilidadOpcionesAsync(opcionIds);
+
         categoriaSeleccionadaId = CategoriasDeMarca(marcaSeleccionada).FirstOrDefault()?.Id;
 
         cargando = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        referenciaHub = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referenciaHub, nameof(OnPedidoActualizado));
+    }
+
+    [JSInvokable]
+    public async Task OnPedidoActualizado()
+    {
+        await CargarDetallePedidoAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task CargarDetallePedidoAsync()
@@ -652,6 +718,12 @@ else
         await PedidoService.SolicitarImpresionAsync(pedido.Id);
         solicitandoImpresion = false;
         impresionSolicitada = true;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        referenciaHub?.Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private class LineaCarrito

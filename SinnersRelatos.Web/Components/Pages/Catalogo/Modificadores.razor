@@ -4,6 +4,7 @@
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IModificadorService ModificadorService
+@inject IIngredienteService IngredienteService
 @inject ISesionService SesionService
 @inject NavigationManager Navigation
 
@@ -134,8 +135,53 @@ else
                                         {
                                             <button class="btn btn-sm btn-outline-success" @onclick="() => CambiarEstadoOpcionAsync(opcion.Id, true, grupo.Id)">Activar</button>
                                         }
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => ToggleRecetaOpcion(opcion.Id)">
+                                            🧪 Ingredientes (@opcion.Recetas.Count)
+                                        </button>
                                     </td>
                                 </tr>
+
+                                @if (opcionRecetaExpandidaId == opcion.Id)
+                                {
+                                    <tr>
+                                        <td colspan="4" class="bg-light">
+                                            @if (opcion.Recetas.Count > 0)
+                                            {
+                                                <ul class="list-unstyled mb-2">
+                                                    @foreach (var receta in opcion.Recetas)
+                                                    {
+                                                        <li class="d-flex align-items-center gap-2 mb-1">
+                                                            <span>@receta.Ingrediente.Nombre — @receta.CantidadRequerida.ToString("0.###") @receta.Ingrediente.UnidadMedida</span>
+                                                            <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => QuitarIngredienteAsync(opcion.Id, receta.IngredienteId)">✕</button>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <p class="text-muted small mb-2">Esta opción todavía no consume ningún ingrediente del inventario.</p>
+                                            }
+
+                                            <div class="row g-2 align-items-end">
+                                                <div class="col-md-5">
+                                                    <select class="form-select form-select-sm" @bind="formularioReceta.IngredienteId">
+                                                        <option value="0">Selecciona un ingrediente...</option>
+                                                        @foreach (var ing in ingredientes)
+                                                        {
+                                                            <option value="@ing.Id">@ing.Nombre (@ing.UnidadMedida)</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <input type="number" step="0.001" min="0" class="form-control form-control-sm" placeholder="Cantidad" @bind="formularioReceta.Cantidad" />
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <button class="btn btn-sm btn-primary" @onclick="() => AsignarIngredienteAsync(opcion.Id)">Agregar / Actualizar</button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
@@ -179,6 +225,10 @@ else
     private int? opcionEditandoId;
     private FormularioOpcion formularioOpcion = new();
 
+    private int? opcionRecetaExpandidaId;
+    private FormularioReceta formularioReceta = new();
+    private List<Ingrediente> ingredientes = [];
+
     private UsuarioSesion? usuarioActor;
 
     protected override async Task OnInitializedAsync()
@@ -195,6 +245,7 @@ else
             return;
         }
 
+        ingredientes = await IngredienteService.ListarAsync();
         await CargarAsync();
     }
 
@@ -300,6 +351,45 @@ else
         await CargarAsync();
     }
 
+    private void ToggleRecetaOpcion(int opcionId)
+    {
+        opcionRecetaExpandidaId = opcionRecetaExpandidaId == opcionId ? null : opcionId;
+        formularioReceta = new FormularioReceta();
+        mensajeError = null;
+    }
+
+    private async Task AsignarIngredienteAsync(int opcionId)
+    {
+        if (formularioReceta.IngredienteId <= 0)
+        {
+            mensajeError = "Selecciona un ingrediente.";
+            return;
+        }
+        if (formularioReceta.Cantidad <= 0)
+        {
+            mensajeError = "Ingresa una cantidad mayor a cero.";
+            return;
+        }
+
+        try
+        {
+            await ModificadorService.AsignarIngredienteAsync(opcionId, formularioReceta.IngredienteId, formularioReceta.Cantidad, usuarioActor!.Id);
+            formularioReceta = new FormularioReceta();
+            mensajeError = null;
+            await CargarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+    }
+
+    private async Task QuitarIngredienteAsync(int opcionId, int ingredienteId)
+    {
+        await ModificadorService.QuitarIngredienteAsync(opcionId, ingredienteId, usuarioActor!.Id);
+        await CargarAsync();
+    }
+
     private class FormularioGrupo
     {
         public int? Id { get; set; }
@@ -315,5 +405,11 @@ else
     {
         public string Nombre { get; set; } = "";
         public decimal PrecioAdicional { get; set; }
+    }
+
+    private class FormularioReceta
+    {
+        public int IngredienteId { get; set; }
+        public decimal Cantidad { get; set; }
     }
 }

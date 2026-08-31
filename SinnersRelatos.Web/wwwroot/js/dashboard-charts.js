@@ -54,6 +54,30 @@ window.dashboardCharts = (function () {
         });
     }
 
+    function renderBarrasVerticales(canvasId, etiquetas, datos, color) {
+        destruir(canvasId);
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        instancias[canvasId] = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: etiquetas,
+                datasets: [{
+                    label: "Disponibles para preparar",
+                    data: datos,
+                    backgroundColor: color
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+            }
+        });
+    }
+
     function destruir(canvasId) {
         if (instancias[canvasId]) {
             instancias[canvasId].destroy();
@@ -61,5 +85,5 @@ window.dashboardCharts = (function () {
         }
     }
 
-    return { renderLinea, renderBarras };
+    return { renderLinea, renderBarras, renderBarrasVerticales };
 })();

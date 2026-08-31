@@ -10,4 +10,5 @@ public class Ingrediente
     public bool Activo { get; set; } = true;
 
     public ICollection<RecetaProducto> Recetas { get; set; } = [];
+    public ICollection<RecetaOpcionModificador> RecetasOpciones { get; set; } = [];
 }

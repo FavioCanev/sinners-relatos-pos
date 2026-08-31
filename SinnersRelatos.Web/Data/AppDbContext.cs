@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PedidoMesa> PedidosMesas => Set<PedidoMesa>();
     public DbSet<Ingrediente> Ingredientes => Set<Ingrediente>();
     public DbSet<RecetaProducto> RecetasProducto => Set<RecetaProducto>();
+    public DbSet<RecetaOpcionModificador> RecetasOpcionModificador => Set<RecetaOpcionModificador>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -157,6 +158,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasOne(r => r.Ingrediente)
                 .WithMany(i => i.Recetas)
+                .HasForeignKey(r => r.IngredienteId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RecetaOpcionModificador>(entity =>
+        {
+            entity.HasKey(r => new { r.OpcionModificadorId, r.IngredienteId });
+            entity.Property(r => r.CantidadRequerida).HasPrecision(10, 3);
+
+            entity.HasOne(r => r.OpcionModificador)
+                .WithMany(o => o.Recetas)
+                .HasForeignKey(r => r.OpcionModificadorId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.Ingrediente)
+                .WithMany(i => i.RecetasOpciones)
                 .HasForeignKey(r => r.IngredienteId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
