@@ -10,6 +10,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
     public async Task<List<GrupoModificador>> ListarGruposAsync() =>
         await context.GruposModificadores
             .Include(g => g.Opciones).ThenInclude(o => o.Recetas).ThenInclude(r => r.Ingrediente)
+            .Include(g => g.Opciones).ThenInclude(o => o.Recetas).ThenInclude(r => r.Producto)
+            .Include(g => g.Productos).ThenInclude(pg => pg.Producto)
             .OrderBy(g => g.Nombre)
             .ToListAsync();
 
@@ -96,7 +98,7 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
             $"{(activo ? "Activó" : "Desactivó")} la opción '{opcion.Nombre}'.");
     }
 
-    public async Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int actorUsuarioId)
+    public async Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int? productoId, int actorUsuarioId)
     {
         var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
             ?? throw new InvalidOperationException($"Opción {opcionId} no encontrada.");
@@ -104,7 +106,7 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
             ?? throw new InvalidOperationException($"Ingrediente {ingredienteId} no encontrado.");
 
         var receta = await context.RecetasOpcionModificador
-            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId);
+            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId && r.ProductoId == productoId);
 
         if (receta is null)
         {
@@ -112,6 +114,7 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
             {
                 OpcionModificadorId = opcionId,
                 IngredienteId = ingredienteId,
+                ProductoId = productoId,
                 CantidadRequerida = cantidadRequerida
             });
         }
@@ -122,16 +125,25 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
         await context.SaveChangesAsync();
 
-        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.AsignarRecetaOpcionModificador,
-            $"Asignó {cantidadRequerida} {ingrediente.UnidadMedida} de '{ingrediente.Nombre}' a la opción '{opcion.Nombre}'.");
+        string detalle;
+        if (productoId is null)
+        {
+            detalle = $"Asignó {cantidadRequerida} {ingrediente.UnidadMedida} de '{ingrediente.Nombre}' a la opción '{opcion.Nombre}' (por defecto).";
+        }
+        else
+        {
+            var nombreProducto = (await context.Productos.FindAsync(productoId.Value))?.Nombre ?? $"#{productoId}";
+            detalle = $"Asignó {cantidadRequerida} {ingrediente.UnidadMedida} de '{ingrediente.Nombre}' a la opción '{opcion.Nombre}' solo para '{nombreProducto}'.";
+        }
+        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.AsignarRecetaOpcionModificador, detalle);
     }
 
-    public async Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int actorUsuarioId)
+    public async Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int? productoId, int actorUsuarioId)
     {
         var receta = await context.RecetasOpcionModificador
             .Include(r => r.Ingrediente)
             .Include(r => r.OpcionModificador)
-            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId)
+            .FirstOrDefaultAsync(r => r.OpcionModificadorId == opcionId && r.IngredienteId == ingredienteId && r.ProductoId == productoId)
             ?? throw new InvalidOperationException("La receta no existe.");
 
         var nombreIngrediente = receta.Ingrediente.Nombre;
@@ -141,6 +153,6 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
         await context.SaveChangesAsync();
 
         await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.QuitarRecetaOpcionModificador,
-            $"Quitó '{nombreIngrediente}' de la opción '{nombreOpcion}'.");
+            $"Quitó '{nombreIngrediente}' de la opción '{nombreOpcion}'{(productoId is null ? "" : $" (producto #{productoId})")}.");
     }
 }

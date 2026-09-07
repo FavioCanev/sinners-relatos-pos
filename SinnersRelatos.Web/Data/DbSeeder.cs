@@ -1,17 +1,39 @@
 using Microsoft.EntityFrameworkCore;
 using SinnersRelatos.Web.Models;
+using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AppDbContext context)
+    public static async Task SeedAsync(AppDbContext context, IPasswordHasher passwordHasher)
     {
+        if (!await context.Usuarios.AnyAsync())
+            await SeedAdminAsync(context, passwordHasher);
+
         if (!await context.Categorias.AnyAsync())
             await SeedCatalogoAsync(context);
 
         if (!await context.Mesas.AnyAsync())
             await SeedMesasAsync(context);
+
+        if (!await context.Ingredientes.AnyAsync())
+            await SeedIngredientesYRecetasSinnersAsync(context);
+    }
+
+    private static async Task SeedAdminAsync(AppDbContext context, IPasswordHasher passwordHasher)
+    {
+        var empleado = new Empleado { Nombres = "Admin", Apellidos = "Sinners & Relatos" };
+        var usuario = new Usuario
+        {
+            NombreUsuario = "admin",
+            PasswordHash = passwordHasher.Hash("admin123"),
+            Rol = RolUsuario.Administrador,
+            Empleado = empleado
+        };
+
+        context.Usuarios.Add(usuario);
+        await context.SaveChangesAsync();
     }
 
     private static async Task SeedCatalogoAsync(AppDbContext context)
@@ -340,10 +362,11 @@ public static class DbSeeder
         }
 
         // Tipo de Leche: Café Clásico + Frappés + Batidos
+        // Espresso, Doppio, Americano, Affogato y Cold Brew quedan fuera: no llevan leche.
         Vincular(grupoLeche,
-            "sin.cafe.espresso", "sin.cafe.doppio", "sin.cafe.americano", "sin.cafe.bombon",
+            "sin.cafe.bombon",
             "sin.cafe.capuccino", "sin.cafe.capuccino_caramelo", "sin.cafe.capuccino_menta",
-            "sin.cafe.moccacino", "sin.cafe.affogato", "sin.cafe.coldbrew",
+            "sin.cafe.moccacino",
             "sin.frappe.clasico", "sin.frappe.caramelo", "sin.frappe.chocolate", "sin.frappe.oreo",
             "sin.batido.platano", "sin.batido.fresa", "sin.batido.arandano", "sin.batido.especial");
 
@@ -377,6 +400,493 @@ public static class DbSeeder
             mesas.Add(new Mesa { Marca = Marca.Relatos, Tipo = TipoMesa.Mesa, Numero = numero });
 
         context.Mesas.AddRange(mesas);
+        await context.SaveChangesAsync();
+    }
+
+    // Recetas tomadas de la planilla de costeo de Sinners. Solo cubre productos de Sinners
+    // (la planilla no incluye Relatos). Stock inicial en 0: hay que cargar el stock real
+    // desde la pantalla de Ingredientes antes de operar.
+    private static async Task SeedIngredientesYRecetasSinnersAsync(AppDbContext context)
+    {
+        var ingredientesData = new (string Nombre, string Unidad)[]
+        {
+            ("Aceite", "ml"),
+            ("Agua Personal con Gas", "ml"),
+            ("Agua Tónica", "ml"),
+            ("Agua", "ml"),
+            ("Algarrobina (Licor)", "ml"),
+            ("Amaretto", "ml"),
+            ("Angostura (Amargo)", "ml"),
+            ("Arándano", "g"),
+            ("Azúcar Blanca", "g"),
+            ("Azúcar", "g"),
+            ("Baileys", "ml"),
+            ("Barquillos", "unidad"),
+            ("Cabanossi", "g"),
+            ("Café en Grano", "g"),
+            ("Campari", "ml"),
+            ("Canela", "g"),
+            ("Carne de Hamburguesa", "g"),
+            ("Cedrón", "g"),
+            ("Chimichurri", "g"),
+            ("Chocolate de Taza", "g"),
+            ("Chorizo Artesanal (Argentino)", "g"),
+            ("Chorizo Artesanal (Español)", "g"),
+            ("Chorizo Industrial", "g"),
+            ("Crema de Cacao Blanca", "ml"),
+            ("Crema de Coco", "ml"),
+            ("Crema de Leche", "ml"),
+            ("Durazno", "g"),
+            ("Empanada de Carne (Prefabricada)", "unidad"),
+            ("Empanada de Jamón y Queso (Prefabricada)", "unidad"),
+            ("Fernet", "ml"),
+            ("Fresa", "g"),
+            ("Frutos Rojos", "g"),
+            ("Galleta tipo Oreo", "unidad"),
+            ("Gaseosa", "ml"),
+            ("Gin", "ml"),
+            ("Ginger Ale", "ml"),
+            ("Helado de Vainilla", "ml"),
+            ("Hielo", "g"),
+            ("Huevos", "unidad"),
+            ("Jamaica (Flor/Infusión)", "g"),
+            ("Jamón", "g"),
+            ("Jarabe de Goma", "ml"),
+            ("Jarabe de Vainilla", "ml"),
+            ("Jugo de Limón", "ml"),
+            ("Kahlúa (Licor de Café)", "ml"),
+            ("Leche Condensada", "g"),
+            ("Leche Deslactosada", "ml"),
+            ("Leche Entera", "ml"),
+            ("Leche en Polvo", "g"),
+            ("Lechuga", "g"),
+            ("Licor de Menta", "ml"),
+            ("Limón", "unidad"),
+            ("Maracuyá", "g"),
+            ("Masa de Pizza", "unidad"),
+            ("Miel", "g"),
+            ("Mix de Frutas", "g"),
+            ("Naranja", "unidad"),
+            ("Pan Ciabatta", "unidad"),
+            ("Pan de Hamburguesa", "unidad"),
+            ("Panceta", "g"),
+            ("Papa Fresca (Fritura)", "g"),
+            ("Papas", "g"),
+            ("Papaya", "g"),
+            ("Pimiento", "g"),
+            ("Pisco", "ml"),
+            ("Piña (Fresca)", "g"),
+            ("Piña (Lata)", "g"),
+            ("Plátano", "g"),
+            ("Queso Mozzarella", "g"),
+            ("Red Bull", "ml"),
+            ("Ron Blanco", "ml"),
+            ("Ron Jamaiquino", "ml"),
+            ("Salsa de Tomate", "g"),
+            ("Syrup de Caramelo", "g"),
+            ("Syrup de Chocolate", "ml"),
+            ("Tequila", "ml"),
+            ("Tomate", "g"),
+            ("Triple Sec", "ml"),
+            ("Té a Elegir (Base)", "unidad"),
+            ("Vermut Rojo", "ml"),
+            ("Vodka", "ml"),
+            ("Whisky Bourbon", "ml"),
+            ("Whisky", "ml"),
+        };
+
+        var ingredientes = ingredientesData
+            .Select(i => new Ingrediente { Nombre = i.Nombre, UnidadMedida = i.Unidad })
+            .ToList();
+        context.Ingredientes.AddRange(ingredientes);
+        await context.SaveChangesAsync();
+        var porNombre = ingredientes.ToDictionary(i => i.Nombre);
+
+        var productos = await context.Productos
+            .Where(p => p.Marca == Marca.Sinners)
+            .ToDictionaryAsync(p => p.Nombre);
+
+        var recetaProductoData = new (string Producto, string Ingrediente, decimal Cantidad)[]
+        {
+            ("Espresso", "Café en Grano", 18m),
+            ("Doppio", "Café en Grano", 36m),
+            ("Americano", "Café en Grano", 18m),
+            ("Americano", "Agua", 260m),
+            ("Bombón", "Café en Grano", 18m),
+            ("Bombón", "Leche Condensada", 30m),
+            ("Capuccino", "Café en Grano", 18m),
+            ("Capuccino de Caramelo", "Café en Grano", 18m),
+            ("Capuccino de Caramelo", "Syrup de Caramelo", 24m),
+            ("Capuccino de Menta", "Café en Grano", 18m),
+            ("Capuccino de Menta", "Licor de Menta", 30m),
+            ("Moccacino", "Café en Grano", 18m),
+            ("Moccacino", "Syrup de Chocolate", 30m),
+            ("Affogato", "Helado de Vainilla", 50m),
+            ("Affogato", "Café en Grano", 18m),
+            ("Cold Brew", "Café en Grano", 20m),
+            ("Cold Brew", "Agua", 200m),
+            ("Iced Capuccino", "Café en Grano", 18m),
+            ("Iced Capuccino", "Leche Entera", 180m),
+            ("Iced Capuccino", "Jarabe de Vainilla", 30m),
+            ("Iced Capuccino", "Hielo", 70m),
+            ("Iced Mocaccino", "Café en Grano", 18m),
+            ("Iced Mocaccino", "Leche Entera", 180m),
+            ("Iced Mocaccino", "Hielo", 70m),
+            ("Iced Mocaccino", "Jarabe de Vainilla", 30m),
+            ("Iced Mocaccino", "Syrup de Chocolate", 30m),
+            ("Orange Coffee", "Naranja", 2m),
+            ("Orange Coffee", "Jarabe de Goma", 30m),
+            ("Orange Coffee", "Café en Grano", 18m),
+            ("Orange Coffee", "Hielo", 70m),
+            ("Orange Coffee", "Ginger Ale", 60m),
+            ("Lemon Coffee", "Limón", 4m),
+            ("Lemon Coffee", "Café en Grano", 18m),
+            ("Lemon Coffee", "Jarabe de Goma", 60m),
+            ("Lemon Coffee", "Hielo", 70m),
+            ("Lemon Coffee", "Ginger Ale", 30m),
+            ("Espresso Ginger", "Café en Grano", 18m),
+            ("Espresso Ginger", "Ginger Ale", 120m),
+            ("Espresso Ginger", "Hielo", 70m),
+            ("Coffee Tonic", "Café en Grano", 18m),
+            ("Coffee Tonic", "Agua Tónica", 120m),
+            ("Coffee Tonic", "Hielo", 70m),
+            ("Agua Personal", "Agua Personal con Gas", 630m),
+            ("Gaseosa Personal", "Gaseosa", 630m),
+            ("Red Bull", "Red Bull", 250m),
+            ("Chocolate con Leche", "Chocolate de Taza", 40m),
+            ("Chocolate con Leche", "Leche Entera", 240m),
+            ("Chocolate con Leche", "Leche Condensada", 20m),
+            ("Té de Cedrón", "Cedrón", 10m),
+            ("Té de Cedrón", "Agua", 240m),
+            ("Té de Cedrón", "Miel", 20m),
+            ("Té Aromático", "Canela", 2m),
+            ("Té Aromático", "Agua", 240m),
+            ("Té Aromático", "Miel", 20m),
+            ("Té Tropical", "Agua", 240m),
+            ("Té Tropical", "Miel", 20m),
+            ("Té Tropical", "Jamaica (Flor/Infusión)", 7m),
+            ("Té Tropical", "Naranja", 1m),
+            ("Té Piteado", "Té a Elegir (Base)", 1m),
+            ("Té Piteado", "Pisco", 60m),
+            ("Té de Cedrón (Jarra)", "Cedrón", 40m),
+            ("Té de Cedrón (Jarra)", "Agua", 1000m),
+            ("Té de Cedrón (Jarra)", "Miel", 80m),
+            ("Té Aromático (Jarra)", "Canela", 8m),
+            ("Té Aromático (Jarra)", "Agua", 1000m),
+            ("Té Aromático (Jarra)", "Miel", 80m),
+            ("Té Tropical (Jarra)", "Agua", 1000m),
+            ("Té Tropical (Jarra)", "Miel", 80m),
+            ("Té Tropical (Jarra)", "Jamaica (Flor/Infusión)", 30m),
+            ("Té Tropical (Jarra)", "Naranja", 1m),
+            ("Té Piteado (Jarra)", "Té a Elegir (Base)", 1m),
+            ("Té Piteado (Jarra)", "Pisco", 60m),
+            ("Pizza Americana", "Masa de Pizza", 1m),
+            ("Pizza Americana", "Salsa de Tomate", 45m),
+            ("Pizza Americana", "Queso Mozzarella", 60m),
+            ("Pizza Americana", "Jamón", 40m),
+            ("Pizza de Chorizo", "Masa de Pizza", 1m),
+            ("Pizza de Chorizo", "Salsa de Tomate", 45m),
+            ("Pizza de Chorizo", "Queso Mozzarella", 60m),
+            ("Pizza de Chorizo", "Chorizo Industrial", 40m),
+            ("Pizza de Cabanossi", "Masa de Pizza", 1m),
+            ("Pizza de Cabanossi", "Salsa de Tomate", 45m),
+            ("Pizza de Cabanossi", "Queso Mozzarella", 60m),
+            ("Pizza de Cabanossi", "Cabanossi", 12.5m),
+            ("Pizza Hawaiana", "Masa de Pizza", 1m),
+            ("Pizza Hawaiana", "Salsa de Tomate", 45m),
+            ("Pizza Hawaiana", "Queso Mozzarella", 60m),
+            ("Pizza Hawaiana", "Jamón", 40m),
+            ("Pizza Hawaiana", "Piña (Lata)", 60m),
+            ("Pizza de Cabanossi con Piña", "Masa de Pizza", 1m),
+            ("Pizza de Cabanossi con Piña", "Salsa de Tomate", 45m),
+            ("Pizza de Cabanossi con Piña", "Queso Mozzarella", 60m),
+            ("Pizza de Cabanossi con Piña", "Cabanossi", 12.5m),
+            ("Pizza de Cabanossi con Piña", "Piña (Lata)", 60m),
+            ("Pizza Parrillera", "Masa de Pizza", 1m),
+            ("Pizza Parrillera", "Salsa de Tomate", 45m),
+            ("Pizza Parrillera", "Queso Mozzarella", 60m),
+            ("Pizza Parrillera", "Pimiento", 50m),
+            ("Pizza Parrillera", "Chimichurri", 20m),
+            ("Salchipapa de Panceta Ahumada", "Papa Fresca (Fritura)", 330m),
+            ("Salchipapa de Panceta Ahumada", "Panceta", 60m),
+            ("Salchipapa de Panceta Ahumada", "Aceite", 35m),
+            ("Salchipapa de Chorizo", "Papa Fresca (Fritura)", 330m),
+            ("Salchipapa de Chorizo", "Chorizo Artesanal (Argentino)", 180m),
+            ("Salchipapa de Chorizo", "Aceite", 35m),
+            ("Salchipapa de Entraña", "Papa Fresca (Fritura)", 330m),
+            ("Salchipapa de Entraña", "Aceite", 35m),
+            ("Empanada de Carne", "Empanada de Carne (Prefabricada)", 1m),
+            ("Empanada de Jamón y Queso", "Empanada de Jamón y Queso (Prefabricada)", 1m),
+            ("Choriargento", "Chorizo Artesanal (Argentino)", 180m),
+            ("Choriargento", "Pan Ciabatta", 1m),
+            ("Choriargento", "Lechuga", 20m),
+            ("Choriargento", "Tomate", 50m),
+            ("Choriargento", "Papas", 20m),
+            ("Choriperucho", "Chorizo Artesanal (Español)", 160m),
+            ("Choriperucho", "Pan Ciabatta", 1m),
+            ("Choriperucho", "Lechuga", 20m),
+            ("Choriperucho", "Tomate", 50m),
+            ("Choriperucho", "Chimichurri", 10m),
+            ("Choriperucho", "Papas", 20m),
+            ("Hamburguesa", "Pan de Hamburguesa", 1m),
+            ("Hamburguesa", "Carne de Hamburguesa", 120m),
+            ("Hamburguesa", "Lechuga", 20m),
+            ("Hamburguesa", "Tomate", 50m),
+            ("Hamburguesa", "Papas", 20m),
+            ("Sandwich Panceta", "Pan Ciabatta", 1m),
+            ("Sandwich Panceta", "Panceta", 60m),
+            ("Sandwich Panceta", "Jamón", 40m),
+            ("Sandwich Panceta", "Piña (Lata)", 60m),
+            ("Sandwich Panceta", "Lechuga", 20m),
+            ("Sandwich Panceta", "Tomate", 50m),
+            ("Sandwich Panceta", "Papas", 20m),
+            ("Frappé Clásico", "Hielo", 150m),
+            ("Frappé Clásico", "Helado de Vainilla", 60m),
+            ("Frappé Clásico", "Café en Grano", 18m),
+            ("Frappé Clásico", "Jarabe de Vainilla", 30m),
+            ("Frappé Clásico", "Leche en Polvo", 15m),
+            ("Frappé Clásico", "Barquillos", 1m),
+            ("Frappé Caramelo", "Hielo", 150m),
+            ("Frappé Caramelo", "Helado de Vainilla", 60m),
+            ("Frappé Caramelo", "Café en Grano", 18m),
+            ("Frappé Caramelo", "Jarabe de Vainilla", 30m),
+            ("Frappé Caramelo", "Leche en Polvo", 15m),
+            ("Frappé Caramelo", "Barquillos", 1m),
+            ("Frappé Caramelo", "Syrup de Caramelo", 30m),
+            ("Frappé Chocolate", "Hielo", 150m),
+            ("Frappé Chocolate", "Helado de Vainilla", 60m),
+            ("Frappé Chocolate", "Café en Grano", 18m),
+            ("Frappé Chocolate", "Jarabe de Vainilla", 30m),
+            ("Frappé Chocolate", "Leche en Polvo", 15m),
+            ("Frappé Chocolate", "Barquillos", 1m),
+            ("Frappé Chocolate", "Syrup de Chocolate", 30m),
+            ("Frappé Oreo", "Hielo", 150m),
+            ("Frappé Oreo", "Helado de Vainilla", 60m),
+            ("Frappé Oreo", "Café en Grano", 18m),
+            ("Frappé Oreo", "Jarabe de Vainilla", 30m),
+            ("Frappé Oreo", "Leche en Polvo", 15m),
+            ("Frappé Oreo", "Barquillos", 1m),
+            ("Frappé Oreo", "Galleta tipo Oreo", 4m),
+            ("Batido de Plátano", "Plátano", 150m),
+            ("Batido de Plátano", "Jarabe de Goma", 30m),
+            ("Batido de Fresa", "Fresa", 50m),
+            ("Batido de Fresa", "Jarabe de Goma", 30m),
+            ("Batido de Arándano", "Arándano", 50m),
+            ("Batido de Arándano", "Jarabe de Goma", 30m),
+            ("Batido Especial", "Mix de Frutas", 200m),
+            ("Batido Especial", "Jarabe de Goma", 30m),
+            ("Jugo de Papaya", "Papaya", 150m),
+            ("Jugo de Papaya", "Agua", 300m),
+            ("Jugo de Papaya", "Jarabe de Goma", 30m),
+            ("Jugo de Piña", "Piña (Fresca)", 150m),
+            ("Jugo de Piña", "Agua", 300m),
+            ("Jugo de Piña", "Jarabe de Goma", 30m),
+            ("Jugo de Maracuyá", "Maracuyá", 150m),
+            ("Jugo de Maracuyá", "Agua", 300m),
+            ("Jugo de Maracuyá", "Jarabe de Goma", 30m),
+            ("Jugo Surtido", "Mix de Frutas", 200m),
+            ("Jugo Surtido", "Agua", 300m),
+            ("Jugo Surtido", "Jarabe de Goma", 30m),
+            ("Limonada Clásica", "Agua", 270m),
+            ("Limonada Clásica", "Azúcar", 20m),
+            ("Limonada Clásica", "Limón", 1.5m),
+            ("Limonada de Frutos Rojos", "Agua", 240m),
+            ("Limonada de Frutos Rojos", "Frutos Rojos", 120m),
+            ("Limonada de Frutos Rojos", "Azúcar", 20m),
+            ("Limonada de Frutos Rojos", "Limón", 1.5m),
+            ("Limonada de Durazno", "Agua", 240m),
+            ("Limonada de Durazno", "Durazno", 120m),
+            ("Limonada de Durazno", "Azúcar", 20m),
+            ("Limonada de Durazno", "Limón", 1.5m),
+            ("Kingston Negroni", "Ron Jamaiquino", 30m),
+            ("Kingston Negroni", "Campari", 30m),
+            ("Kingston Negroni", "Vermut Rojo", 30m),
+            ("Kingston Negroni", "Hielo", 80m),
+            ("Casino de Menta", "Vodka", 45m),
+            ("Casino de Menta", "Licor de Menta", 30m),
+            ("Casino de Menta", "Crema de Leche", 30m),
+            ("Casino de Menta", "Crema de Cacao Blanca", 30m),
+            ("Casino de Menta", "Hielo", 80m),
+            ("Old Fashioned", "Whisky Bourbon", 60m),
+            ("Old Fashioned", "Azúcar Blanca", 15m),
+            ("Old Fashioned", "Angostura (Amargo)", 5m),
+            ("Old Fashioned", "Agua", 30m),
+            ("Old Fashioned", "Naranja", 0.25m),
+            ("Margarita", "Tequila", 50m),
+            ("Margarita", "Triple Sec", 25m),
+            ("Margarita", "Limón", 1m),
+            ("Margarita", "Hielo", 80m),
+            ("Negroni", "Gin", 30m),
+            ("Negroni", "Vermut Rojo", 30m),
+            ("Negroni", "Campari", 30m),
+            ("Negroni", "Hielo", 80m),
+            ("Orgasmo", "Baileys", 30m),
+            ("Orgasmo", "Amaretto", 30m),
+            ("Orgasmo", "Kahlúa (Licor de Café)", 30m),
+            ("Orgasmo", "Hielo", 80m),
+            ("Whisky Sour", "Whisky", 60m),
+            ("Whisky Sour", "Limón", 1m),
+            ("Whisky Sour", "Jarabe de Goma", 20m),
+            ("Whisky Sour", "Hielo", 80m),
+            ("Piña Colada", "Ron Blanco", 50m),
+            ("Piña Colada", "Crema de Coco", 30m),
+            ("Piña Colada", "Piña (Lata)", 90m),
+            ("Piña Colada", "Hielo", 80m),
+            ("Charro Negro", "Tequila", 50m),
+            ("Charro Negro", "Gaseosa", 30m),
+            ("Charro Negro", "Limón", 1m),
+            ("Charro Negro", "Hielo", 80m),
+            ("Godfather", "Whisky", 45m),
+            ("Godfather", "Amaretto", 25m),
+            ("Godfather", "Hielo", 80m),
+            ("Pisco Sour", "Pisco", 60m),
+            ("Pisco Sour", "Limón", 2m),
+            ("Pisco Sour", "Jarabe de Goma", 20m),
+            ("Pisco Sour", "Huevos", 1m),
+            ("Pisco Sour", "Angostura (Amargo)", 2m),
+            ("Pisco Sour", "Hielo", 80m),
+            ("Algarrobina", "Pisco", 60m),
+            ("Algarrobina", "Algarrobina (Licor)", 30m),
+            ("Algarrobina", "Leche Entera", 30m),
+            ("Algarrobina", "Canela", 3m),
+            ("Algarrobina", "Hielo", 80m),
+            ("Capitán", "Pisco", 60m),
+            ("Capitán", "Vermut Rojo", 30m),
+            ("Capitán", "Hielo", 80m),
+            ("Gin Tonic", "Gin", 50m),
+            ("Gin Tonic", "Agua Tónica", 150m),
+            ("Gin Tonic", "Limón", 0.5m),
+            ("Gin Tonic", "Hielo", 80m),
+            ("Fernandito", "Fernet", 50m),
+            ("Fernandito", "Gaseosa", 60m),
+            ("Fernandito", "Hielo", 80m),
+            ("Mojito Clásico", "Ron Blanco", 50m),
+            ("Mojito Clásico", "Jugo de Limón", 25m),
+            ("Mojito Clásico", "Jarabe de Goma", 30m),
+            ("Mojito Clásico", "Hielo", 80m),
+            ("Chilcano Clásico", "Pisco", 60m),
+            ("Chilcano Clásico", "Limón", 2m),
+            ("Chilcano Clásico", "Ginger Ale", 60m),
+            ("Chilcano Clásico", "Angostura (Amargo)", 2m),
+            ("Chilcano Clásico", "Hielo", 80m),
+            ("Cuba", "Ron Jamaiquino", 50m),
+            ("Cuba", "Gaseosa", 60m),
+            ("Cuba", "Limón", 0.5m),
+            ("Cuba", "Hielo", 80m),
+            ("Sinners Margarita", "Tequila", 50m),
+            ("Sinners Margarita", "Kahlúa (Licor de Café)", 20m),
+            ("Sinners Margarita", "Limón", 1m),
+            ("Sinners Margarita", "Jarabe de Goma", 15m),
+            ("Sinners Margarita", "Hielo", 80m),
+            ("Café Irlandés", "Whisky", 50m),
+            ("Café Irlandés", "Jarabe de Goma", 30m),
+            ("Café Irlandés", "Café en Grano", 18m),
+            ("Café Irlandés", "Leche Entera", 30m),
+            ("Café Irlandés", "Hielo", 80m),
+            ("Espresso Martini", "Vodka", 50m),
+            ("Espresso Martini", "Kahlúa (Licor de Café)", 20m),
+            ("Espresso Martini", "Jarabe de Vainilla", 10m),
+            ("Espresso Martini", "Hielo", 80m),
+            ("Toro Ruso", "Vodka", 50m),
+            ("Toro Ruso", "Jarabe de Vainilla", 20m),
+            ("Toro Ruso", "Café en Grano", 18m),
+            ("Toro Ruso", "Ginger Ale", 60m),
+            ("Toro Ruso", "Hielo", 80m),
+            ("Old Coffee Fashion", "Ron Jamaiquino", 60m),
+            ("Old Coffee Fashion", "Kahlúa (Licor de Café)", 10m),
+            ("Old Coffee Fashion", "Angostura (Amargo)", 5m),
+            ("Old Coffee Fashion", "Naranja", 0.25m),
+            ("Old Coffee Fashion", "Hielo", 80m),
+            ("Café Negroni", "Gin", 30m),
+            ("Café Negroni", "Campari", 30m),
+            ("Café Negroni", "Vermut Rojo", 30m),
+            ("Café Negroni", "Hielo", 80m),
+            ("Shakerato Baileys", "Baileys", 50m),
+            ("Shakerato Baileys", "Café en Grano", 36m),
+            ("Shakerato Baileys", "Hielo", 80m),
+            ("Café Sour", "Pisco", 60m),
+            ("Café Sour", "Café en Grano", 30m),
+            ("Café Sour", "Limón", 1m),
+            ("Café Sour", "Jarabe de Goma", 20m),
+            ("Café Sour", "Huevos", 1m),
+            ("Café Sour", "Angostura (Amargo)", 2m),
+            ("Café Sour", "Hielo", 80m),
+            ("Café Mexicano", "Café en Grano", 18m),
+            ("Café Mexicano", "Tequila", 45m),
+            ("Café Mexicano", "Kahlúa (Licor de Café)", 15m),
+            ("Café Mexicano", "Leche Entera", 40m),
+            ("Café Mexicano", "Hielo", 80m),
+            ("Ginger Ale Coffee", "Vodka", 50m),
+            ("Ginger Ale Coffee", "Jarabe de Vainilla", 20m),
+            ("Ginger Ale Coffee", "Café en Grano", 18m),
+            ("Ginger Ale Coffee", "Ginger Ale", 60m),
+            ("Ginger Ale Coffee", "Hielo", 80m),
+            ("Ruso Negro", "Vodka", 50m),
+            ("Ruso Negro", "Kahlúa (Licor de Café)", 20m),
+            ("Ruso Negro", "Hielo", 80m),
+            ("Ruso Blanco", "Vodka", 45m),
+            ("Ruso Blanco", "Jarabe de Goma", 30m),
+            ("Ruso Blanco", "Café en Grano", 18m),
+            ("Ruso Blanco", "Leche Entera", 40m),
+            ("Ruso Blanco", "Hielo", 80m),
+        };
+
+        foreach (var (nombreProducto, nombreIngrediente, cantidad) in recetaProductoData)
+        {
+            context.RecetasProducto.Add(new RecetaProducto
+            {
+                Producto = productos[nombreProducto],
+                Ingrediente = porNombre[nombreIngrediente],
+                CantidadRequerida = cantidad
+            });
+        }
+        await context.SaveChangesAsync();
+
+        // Productos donde el cliente elige "Leche Entera" o "Leche Deslactosada" (grupo
+        // modificador "Tipo de Leche"): la cantidad de leche depende del producto, así que
+        // se registra como sobrescritura por producto en vez de receta fija. Ver
+        // RecetaOpcionModificador.ProductoId.
+        var recetaLecheData = new (string Producto, decimal Cantidad)[]
+        {
+            ("Bombón", 100m),
+            ("Capuccino", 240m),
+            ("Capuccino de Caramelo", 240m),
+            ("Capuccino de Menta", 240m),
+            ("Moccacino", 180m),
+            ("Frappé Clásico", 100m),
+            ("Frappé Caramelo", 100m),
+            ("Frappé Chocolate", 100m),
+            ("Frappé Oreo", 100m),
+            ("Batido de Plátano", 300m),
+            ("Batido de Fresa", 300m),
+            ("Batido de Arándano", 300m),
+            ("Batido Especial", 300m),
+        };
+
+        var grupoLeche = await context.GruposModificadores
+            .Include(g => g.Opciones)
+            .FirstAsync(g => g.Nombre == "Tipo de Leche");
+        var opcionEntera = grupoLeche.Opciones.First(o => o.Nombre == "Leche Entera");
+        var opcionDeslactosada = grupoLeche.Opciones.First(o => o.Nombre == "Leche Deslactosada");
+
+        foreach (var (nombreProducto, cantidad) in recetaLecheData)
+        {
+            var producto = productos[nombreProducto];
+            context.RecetasOpcionModificador.Add(new RecetaOpcionModificador
+            {
+                OpcionModificador = opcionEntera,
+                Ingrediente = porNombre["Leche Entera"],
+                Producto = producto,
+                CantidadRequerida = cantidad
+            });
+            context.RecetasOpcionModificador.Add(new RecetaOpcionModificador
+            {
+                OpcionModificador = opcionDeslactosada,
+                Ingrediente = porNombre["Leche Deslactosada"],
+                Producto = producto,
+                CantidadRequerida = cantidad
+            });
+        }
         await context.SaveChangesAsync();
     }
 }

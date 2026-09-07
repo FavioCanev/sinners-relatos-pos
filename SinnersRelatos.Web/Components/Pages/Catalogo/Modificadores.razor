@@ -145,25 +145,48 @@ else
                                 {
                                     <tr>
                                         <td colspan="4" class="bg-light">
-                                            @if (opcion.Recetas.Count > 0)
-                                            {
-                                                <ul class="list-unstyled mb-2">
-                                                    @foreach (var receta in opcion.Recetas)
-                                                    {
-                                                        <li class="d-flex align-items-center gap-2 mb-1">
-                                                            <span>@receta.Ingrediente.Nombre — @receta.CantidadRequerida.ToString("0.###") @receta.Ingrediente.UnidadMedida</span>
-                                                            <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => QuitarIngredienteAsync(opcion.Id, receta.IngredienteId)">✕</button>
-                                                        </li>
-                                                    }
-                                                </ul>
+                                            @{
+                                                var porDefecto = opcion.Recetas.Where(r => r.ProductoId is null).ToList();
+                                                var porProducto = opcion.Recetas.Where(r => r.ProductoId is not null)
+                                                    .OrderBy(r => r.Producto?.Nombre).ToList();
                                             }
-                                            else
+
+                                            @if (opcion.Recetas.Count == 0)
                                             {
                                                 <p class="text-muted small mb-2">Esta opción todavía no consume ningún ingrediente del inventario.</p>
                                             }
+                                            else
+                                            {
+                                                @if (porDefecto.Count > 0)
+                                                {
+                                                    <div class="small text-muted mb-1">Por defecto (todos los productos que usan esta opción):</div>
+                                                    <ul class="list-unstyled mb-2">
+                                                        @foreach (var receta in porDefecto)
+                                                        {
+                                                            <li class="d-flex align-items-center gap-2 mb-1">
+                                                                <span>@receta.Ingrediente.Nombre — @receta.CantidadRequerida.ToString("0.###") @receta.Ingrediente.UnidadMedida</span>
+                                                                <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => QuitarIngredienteAsync(opcion.Id, receta.IngredienteId, null)">✕</button>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                                @if (porProducto.Count > 0)
+                                                {
+                                                    <div class="small text-muted mb-1">Cantidades específicas por producto:</div>
+                                                    <ul class="list-unstyled mb-2">
+                                                        @foreach (var receta in porProducto)
+                                                        {
+                                                            <li class="d-flex align-items-center gap-2 mb-1">
+                                                                <span><strong>@receta.Producto?.Nombre:</strong> @receta.Ingrediente.Nombre — @receta.CantidadRequerida.ToString("0.###") @receta.Ingrediente.UnidadMedida</span>
+                                                                <button class="btn btn-sm btn-outline-danger py-0 px-1" @onclick="() => QuitarIngredienteAsync(opcion.Id, receta.IngredienteId, receta.ProductoId)">✕</button>
+                                                            </li>
+                                                        }
+                                                    </ul>
+                                                }
+                                            }
 
                                             <div class="row g-2 align-items-end">
-                                                <div class="col-md-5">
+                                                <div class="col-md-4">
                                                     <select class="form-select form-select-sm" @bind="formularioReceta.IngredienteId">
                                                         <option value="0">Selecciona un ingrediente...</option>
                                                         @foreach (var ing in ingredientes)
@@ -172,10 +195,19 @@ else
                                                         }
                                                     </select>
                                                 </div>
-                                                <div class="col-md-3">
+                                                <div class="col-md-2">
                                                     <input type="number" step="0.001" min="0" class="form-control form-control-sm" placeholder="Cantidad" @bind="formularioReceta.Cantidad" />
                                                 </div>
-                                                <div class="col-md-4">
+                                                <div class="col-md-3">
+                                                    <select class="form-select form-select-sm" @bind="formularioReceta.ProductoId">
+                                                        <option value="0">Para todos (por defecto)</option>
+                                                        @foreach (var pg in grupo.Productos.OrderBy(pg => pg.Producto.Nombre))
+                                                        {
+                                                            <option value="@pg.ProductoId">Solo @pg.Producto.Nombre</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-3">
                                                     <button class="btn btn-sm btn-primary" @onclick="() => AsignarIngredienteAsync(opcion.Id)">Agregar / Actualizar</button>
                                                 </div>
                                             </div>
@@ -373,7 +405,8 @@ else
 
         try
         {
-            await ModificadorService.AsignarIngredienteAsync(opcionId, formularioReceta.IngredienteId, formularioReceta.Cantidad, usuarioActor!.Id);
+            int? productoId = formularioReceta.ProductoId > 0 ? formularioReceta.ProductoId : null;
+            await ModificadorService.AsignarIngredienteAsync(opcionId, formularioReceta.IngredienteId, formularioReceta.Cantidad, productoId, usuarioActor!.Id);
             formularioReceta = new FormularioReceta();
             mensajeError = null;
             await CargarAsync();
@@ -384,9 +417,9 @@ else
         }
     }
 
-    private async Task QuitarIngredienteAsync(int opcionId, int ingredienteId)
+    private async Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int? productoId)
     {
-        await ModificadorService.QuitarIngredienteAsync(opcionId, ingredienteId, usuarioActor!.Id);
+        await ModificadorService.QuitarIngredienteAsync(opcionId, ingredienteId, productoId, usuarioActor!.Id);
         await CargarAsync();
     }
 
@@ -411,5 +444,6 @@ else
     {
         public int IngredienteId { get; set; }
         public decimal Cantidad { get; set; }
+        public int ProductoId { get; set; }
     }
 }

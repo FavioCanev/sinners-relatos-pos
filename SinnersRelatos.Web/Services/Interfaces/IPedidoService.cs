@@ -32,7 +32,7 @@ public interface IPedidoService
     Task<Pedido> ObtenerOCrearPedidoAsync(int mesaId, int usuarioId);
     Task<Pedido?> ObtenerConDetalleAsync(int pedidoId);
     Task<Dictionary<int, bool>> VerificarDisponibilidadAsync(IEnumerable<int> productoIds);
-    Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(IEnumerable<int> opcionIds);
+    Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(int productoId, IEnumerable<int> opcionIds);
     Task ConfirmarItemsAsync(int pedidoId, IEnumerable<ItemCarrito> items, int actorUsuarioId);
     Task AnularAsync(int pedidoId, int actorUsuarioId);
     Task CerrarAsync(int pedidoId, int actorUsuarioId);

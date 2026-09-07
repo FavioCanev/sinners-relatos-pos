@@ -12,6 +12,6 @@ public interface IModificadorService
     Task<OpcionModificador> AgregarOpcionAsync(int grupoId, string nombre, decimal precioAdicional, int actorUsuarioId);
     Task ActualizarOpcionAsync(int opcionId, string nombre, decimal precioAdicional, int actorUsuarioId);
     Task CambiarEstadoOpcionAsync(int opcionId, bool activo, int actorUsuarioId);
-    Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int actorUsuarioId);
-    Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int actorUsuarioId);
+    Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int? productoId, int actorUsuarioId);
+    Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int? productoId, int actorUsuarioId);
 }
