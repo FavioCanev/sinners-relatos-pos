@@ -42,8 +42,9 @@ else
 {
     using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
     await context.Database.MigrateAsync();
-    await DbSeeder.SeedAsync(context);
+    await DbSeeder.SeedAsync(context, passwordHasher);
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();

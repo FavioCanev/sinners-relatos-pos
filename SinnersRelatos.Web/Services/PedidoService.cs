@@ -49,17 +49,31 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
             id => recetas.Where(r => r.ProductoId == id).All(r => r.Ingrediente.StockActual >= r.CantidadRequerida));
     }
 
-    public async Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(IEnumerable<int> opcionIds)
+    public async Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(int productoId, IEnumerable<int> opcionIds)
     {
         var ids = opcionIds.ToList();
-        var recetas = await context.RecetasOpcionModificador
-            .Include(r => r.Ingrediente)
-            .Where(r => ids.Contains(r.OpcionModificadorId))
+        var opciones = await context.OpcionesModificadores
+            .Include(o => o.Recetas).ThenInclude(r => r.Ingrediente)
+            .Where(o => ids.Contains(o.Id))
             .ToListAsync();
 
-        return ids.ToDictionary(
-            id => id,
-            id => recetas.Where(r => r.OpcionModificadorId == id).All(r => r.Ingrediente.StockActual >= r.CantidadRequerida));
+        var resultado = new Dictionary<int, bool>();
+        foreach (var id in ids)
+        {
+            var opcion = opciones.FirstOrDefault(o => o.Id == id);
+            var aplicables = opcion is null ? [] : RecetasAplicables(opcion, productoId);
+            resultado[id] = aplicables.All(r => r.Ingrediente.StockActual >= r.CantidadRequerida);
+        }
+        return resultado;
+    }
+
+    // Una opción puede tener una receta específica para este producto (ej. "Leche Entera"
+    // descuenta 240ml en Capuccino pero 180ml en Moccacino); si no hay ninguna específica,
+    // se usa la receta por defecto (ProductoId nulo, ej. el fruto de "Tipo de Fruto").
+    private static List<RecetaOpcionModificador> RecetasAplicables(OpcionModificador opcion, int productoId)
+    {
+        var especificas = opcion.Recetas.Where(r => r.ProductoId == productoId).ToList();
+        return especificas.Count > 0 ? especificas : opcion.Recetas.Where(r => r.ProductoId is null).ToList();
     }
 
     public async Task ConfirmarItemsAsync(int pedidoId, IEnumerable<ItemCarrito> items, int actorUsuarioId)
@@ -93,7 +107,8 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
                 OpcionModificador? opcionConFaltante = null;
                 foreach (var opcion in opciones)
                 {
-                    faltanteOpcion = opcion.Recetas.FirstOrDefault(r => r.Ingrediente.StockActual < r.CantidadRequerida * item.Cantidad);
+                    faltanteOpcion = RecetasAplicables(opcion, producto.Id)
+                        .FirstOrDefault(r => r.Ingrediente.StockActual < r.CantidadRequerida * item.Cantidad);
                     if (faltanteOpcion is not null)
                     {
                         opcionConFaltante = opcion;
@@ -141,7 +156,7 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
             foreach (var opcion in opciones)
             {
-                foreach (var receta in opcion.Recetas)
+                foreach (var receta in RecetasAplicables(opcion, producto.Id))
                 {
                     receta.Ingrediente.StockActual -= receta.CantidadRequerida * item.Cantidad;
                     huboDeduccion = true;

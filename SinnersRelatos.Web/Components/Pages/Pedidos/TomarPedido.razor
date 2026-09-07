@@ -116,7 +116,7 @@ else
         @foreach (var producto in ProductosVisibles)
         {
             var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
-            <button class="producto-card @(agotado ? "agotado" : "")" @onclick="() => OnProductoTap(producto)">
+            <button class="producto-card @(agotado ? "agotado" : "")" @onclick="() => OnProductoTapAsync(producto)">
                 <span class="producto-nombre">@producto.Nombre</span>
                 <span class="producto-precio">S/ @producto.Precio.ToString("0.00")</span>
                 @if (!string.IsNullOrWhiteSpace(busqueda))
@@ -530,11 +530,6 @@ else
         productos = await ProductoService.ListarAsync();
         disponibilidad = await PedidoService.VerificarDisponibilidadAsync(productos.Select(p => p.Id));
 
-        var opcionIds = productos
-            .SelectMany(p => p.GruposModificadores.SelectMany(g => g.GrupoModificador.Opciones.Select(o => o.Id)))
-            .Distinct();
-        disponibilidadOpciones = await PedidoService.VerificarDisponibilidadOpcionesAsync(opcionIds);
-
         categoriaSeleccionadaId = CategoriasDeMarca(marcaSeleccionada).FirstOrDefault()?.Id;
 
         cargando = false;
@@ -571,7 +566,7 @@ else
         categoriaSeleccionadaId = CategoriasDeMarca(marca).FirstOrDefault()?.Id;
     }
 
-    private void OnProductoTap(Producto producto)
+    private async Task OnProductoTapAsync(Producto producto)
     {
         var tieneModificadores = producto.GruposModificadores.Count > 0;
         var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
@@ -583,6 +578,11 @@ else
             forzarVentaModal = false;
             cantidadModal = 1;
             mensajeErrorModal = null;
+
+            var opcionIds = producto.GruposModificadores
+                .SelectMany(g => g.GrupoModificador.Opciones.Select(o => o.Id))
+                .Distinct();
+            disponibilidadOpciones = await PedidoService.VerificarDisponibilidadOpcionesAsync(producto.Id, opcionIds);
         }
         else
         {

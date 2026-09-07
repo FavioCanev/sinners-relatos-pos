@@ -164,7 +164,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<RecetaOpcionModificador>(entity =>
         {
-            entity.HasKey(r => new { r.OpcionModificadorId, r.IngredienteId });
+            entity.HasKey(r => r.Id);
             entity.Property(r => r.CantidadRequerida).HasPrecision(10, 3);
 
             entity.HasOne(r => r.OpcionModificador)
@@ -176,6 +176,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(i => i.RecetasOpciones)
                 .HasForeignKey(r => r.IngredienteId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Producto)
+                .WithMany()
+                .HasForeignKey(r => r.ProductoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // A lo sumo una fila "por defecto" (ProductoId nulo) por combinación opción+ingrediente...
+            entity.HasIndex(r => new { r.OpcionModificadorId, r.IngredienteId })
+                .IsUnique()
+                .HasFilter("[ProductoId] IS NULL");
+
+            // ...y a lo sumo una sobrescritura por producto para esa misma combinación.
+            entity.HasIndex(r => new { r.OpcionModificadorId, r.IngredienteId, r.ProductoId })
+                .IsUnique()
+                .HasFilter("[ProductoId] IS NOT NULL");
         });
 
         modelBuilder.Entity<LogAuditoria>(entity =>
