@@ -40,4 +40,10 @@ public static class TiposAccionAuditoria
     public const string AnularPedido = "Anular pedido";
     public const string CerrarPedido = "Cerrar cuenta / liberar mesa";
     public const string FusionarMesas = "Fusionar mesas";
+
+    public const string CambiarModoPruebas = "Cambiar modo de pruebas";
+    public const string VaciarStockPruebas = "Vaciar stock (modo pruebas)";
+    public const string CargarStockPruebas = "Cargar stock de prueba (modo pruebas)";
+    public const string SimularPedidosPruebas = "Simular pedidos (modo pruebas)";
+    public const string EliminarPedidosPruebas = "Eliminar pedidos de prueba (modo pruebas)";
 }

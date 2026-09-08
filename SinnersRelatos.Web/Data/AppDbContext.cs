@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecetaProducto> RecetasProducto => Set<RecetaProducto>();
     public DbSet<RecetaOpcionModificador> RecetasOpcionModificador => Set<RecetaOpcionModificador>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
+    public DbSet<ConfiguracionSistema> ConfiguracionSistema => Set<ConfiguracionSistema>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

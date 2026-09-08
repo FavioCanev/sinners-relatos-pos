@@ -11,6 +11,9 @@ public static class DbSeeder
         if (!await context.Usuarios.AnyAsync())
             await SeedAdminAsync(context, passwordHasher);
 
+        if (!await context.Usuarios.AnyAsync(u => u.NombreUsuario == "mesero.pruebas"))
+            await SeedMeseroPruebasAsync(context, passwordHasher);
+
         if (!await context.Categorias.AnyAsync())
             await SeedCatalogoAsync(context);
 
@@ -19,6 +22,11 @@ public static class DbSeeder
 
         if (!await context.Ingredientes.AnyAsync())
             await SeedIngredientesYRecetasSinnersAsync(context);
+
+        if (!await context.ConfiguracionSistema.AnyAsync())
+            context.ConfiguracionSistema.Add(new ConfiguracionSistema());
+
+        await context.SaveChangesAsync();
     }
 
     private static async Task SeedAdminAsync(AppDbContext context, IPasswordHasher passwordHasher)
@@ -29,6 +37,25 @@ public static class DbSeeder
             NombreUsuario = "admin",
             PasswordHash = passwordHasher.Hash("admin123"),
             Rol = RolUsuario.Administrador,
+            Empleado = empleado
+        };
+
+        context.Usuarios.Add(usuario);
+        await context.SaveChangesAsync();
+    }
+
+    // Usuario ficticio e inactivo (no puede iniciar sesión) al que se le atribuyen los
+    // pedidos generados desde Herramientas de Desarrollo, para poder identificarlos y
+    // borrarlos sin afectar el historial de meseros reales.
+    private static async Task SeedMeseroPruebasAsync(AppDbContext context, IPasswordHasher passwordHasher)
+    {
+        var empleado = new Empleado { Nombres = "Mesero", Apellidos = "De Pruebas (simulado)" };
+        var usuario = new Usuario
+        {
+            NombreUsuario = "mesero.pruebas",
+            PasswordHash = passwordHasher.Hash(Guid.NewGuid().ToString("N")),
+            Rol = RolUsuario.Mesero,
+            Activo = false,
             Empleado = empleado
         };
 

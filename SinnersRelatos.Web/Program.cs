@@ -28,6 +28,7 @@ builder.Services.AddScoped<IPedidoService, PedidoService>();
 builder.Services.AddScoped<ISesionService, SesionService>();
 builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IHerramientasDesarrolloService, HerramientasDesarrolloService>();
 
 var app = builder.Build();
 

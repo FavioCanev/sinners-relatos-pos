@@ -1,0 +1,234 @@
+@page "/herramientas-desarrollo"
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@inject IHerramientasDesarrolloService HerramientasService
+@inject ISesionService SesionService
+@inject NavigationManager Navigation
+
+<PageTitle>Herramientas de Desarrollo</PageTitle>
+
+<h1>Herramientas de Desarrollo</h1>
+<p class="text-muted">Funciones para generar datos simulados y probar la aplicación. No se usan durante la operación real del negocio.</p>
+
+@if (cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else
+{
+    @if (mensaje is not null)
+    {
+        <div class="alert alert-success alert-dismissible">
+            @mensaje
+            <button type="button" class="btn-close" @onclick="() => mensaje = null"></button>
+        </div>
+    }
+    @if (mensajeError is not null)
+    {
+        <div class="alert alert-danger alert-dismissible">
+            @mensajeError
+            <button type="button" class="btn-close" @onclick="() => mensajeError = null"></button>
+        </div>
+    }
+
+    <div class="card mb-4">
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <h5 class="card-title mb-1">Modo de pruebas</h5>
+                <small class="text-muted">
+                    Actívalo para habilitar las acciones de abajo. Mantenlo apagado durante el servicio normal
+                    para que nadie las active sin querer.
+                </small>
+            </div>
+            <div class="form-check form-switch fs-3 mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="modoPruebasSwitch"
+                       checked="@modoPruebasActivo" @onchange="ToggleModoPruebasAsync" disabled="@procesando" />
+            </div>
+        </div>
+    </div>
+
+    @if (modoPruebasActivo)
+    {
+        <div class="alert alert-warning">
+            ⚠ Modo de pruebas activo. Estas acciones alteran datos reales de la base de datos (stock e inventario,
+            pedidos). Desactívalo cuando termines de probar.
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Stock de ingredientes</h5>
+                <p class="text-muted small">Para probar cómo se ve la app con inventario agotado o con inventario cargado.</p>
+
+                @if (accionConfirmando == "vaciar-stock")
+                {
+                    <ConfirmacionInline Mensaje="¿Vaciar el stock de TODOS los ingredientes a cero? No se puede deshacer."
+                                        Procesando="procesando"
+                                        OnConfirmar="VaciarStockAsync"
+                                        OnCancelar="CancelarConfirmacion" />
+                }
+                else
+                {
+                    <button class="btn btn-outline-danger me-2" @onclick='() => accionConfirmando = "vaciar-stock"' disabled="@procesando">
+                        Vaciar todo el stock
+                    </button>
+                }
+
+                @if (accionConfirmando == "cargar-stock")
+                {
+                    <ConfirmacionInline Mensaje="¿Sobrescribir el stock actual con valores de prueba?"
+                                        Procesando="procesando"
+                                        OnConfirmar="CargarStockDePruebaAsync"
+                                        OnCancelar="CancelarConfirmacion" />
+                }
+                else
+                {
+                    <button class="btn btn-outline-primary" @onclick='() => accionConfirmando = "cargar-stock"' disabled="@procesando">
+                        Cargar stock de prueba
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Pedidos simulados</h5>
+                <p class="text-muted small">
+                    Crea pedidos al azar en mesas activas, atribuidos a un mesero ficticio ("Mesero De Pruebas"),
+                    para probar Mesas, KDS y el Dashboard con datos de ejemplo.
+                </p>
+                <div class="d-flex align-items-end gap-2 mb-3 flex-wrap">
+                    <div>
+                        <label class="form-label mb-0">Cantidad de pedidos</label>
+                        <input type="number" class="form-control" style="width:120px" min="1" max="100" @bind="cantidadPedidos" />
+                    </div>
+                    <button class="btn btn-outline-primary" @onclick="SimularPedidosAsync" disabled="@procesando">
+                        Simular pedidos
+                    </button>
+                </div>
+
+                @if (accionConfirmando == "eliminar-pedidos")
+                {
+                    <ConfirmacionInline Mensaje="¿Eliminar todos los pedidos del mesero de pruebas? El stock que consumieron no se restituye automáticamente."
+                                        Procesando="procesando"
+                                        OnConfirmar="EliminarPedidosDePruebaAsync"
+                                        OnCancelar="CancelarConfirmacion" />
+                }
+                else
+                {
+                    <button class="btn btn-outline-danger" @onclick='() => accionConfirmando = "eliminar-pedidos"' disabled="@procesando">
+                        Eliminar todos los pedidos de prueba
+                    </button>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private UsuarioSesion? usuarioActor;
+    private bool cargando = true;
+    private bool procesando;
+    private bool modoPruebasActivo;
+    private int cantidadPedidos = 10;
+    private string? mensaje;
+    private string? mensajeError;
+    private string? accionConfirmando;
+
+    protected override async Task OnInitializedAsync()
+    {
+        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuarioActor is null)
+        {
+            Navigation.NavigateTo("/login?returnUrl=/herramientas-desarrollo");
+            return;
+        }
+        if (usuarioActor.Rol != RolUsuario.Administrador)
+        {
+            Navigation.NavigateTo("/mesas");
+            return;
+        }
+
+        modoPruebasActivo = await HerramientasService.ObtenerModoPruebasAsync();
+        cargando = false;
+    }
+
+    private void CancelarConfirmacion() => accionConfirmando = null;
+
+    private async Task ToggleModoPruebasAsync(ChangeEventArgs e)
+    {
+        var activar = (bool)(e.Value ?? false);
+        procesando = true;
+        await HerramientasService.CambiarModoPruebasAsync(activar, usuarioActor!.Id);
+        modoPruebasActivo = activar;
+        procesando = false;
+        mensaje = activar ? "Modo de pruebas activado." : "Modo de pruebas desactivado.";
+    }
+
+    private async Task VaciarStockAsync()
+    {
+        procesando = true;
+        mensajeError = null;
+        try
+        {
+            await HerramientasService.VaciarStockAsync(usuarioActor!.Id);
+            mensaje = "Se vació el stock de todos los ingredientes.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        accionConfirmando = null;
+        procesando = false;
+    }
+
+    private async Task CargarStockDePruebaAsync()
+    {
+        procesando = true;
+        mensajeError = null;
+        try
+        {
+            await HerramientasService.CargarStockDePruebaAsync(usuarioActor!.Id);
+            mensaje = "Se cargó el stock de prueba.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        accionConfirmando = null;
+        procesando = false;
+    }
+
+    private async Task SimularPedidosAsync()
+    {
+        procesando = true;
+        mensajeError = null;
+        try
+        {
+            var creados = await HerramientasService.SimularPedidosAsync(cantidadPedidos, usuarioActor!.Id);
+            mensaje = $"Se simularon {creados} pedido(s).";
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        procesando = false;
+    }
+
+    private async Task EliminarPedidosDePruebaAsync()
+    {
+        procesando = true;
+        mensajeError = null;
+        try
+        {
+            var eliminados = await HerramientasService.EliminarPedidosDePruebaAsync(usuarioActor!.Id);
+            mensaje = $"Se eliminaron {eliminados} pedido(s) de prueba.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        accionConfirmando = null;
+        procesando = false;
+    }
+}
