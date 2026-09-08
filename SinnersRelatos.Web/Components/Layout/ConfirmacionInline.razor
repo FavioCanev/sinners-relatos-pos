@@ -1,0 +1,22 @@
+@* Confirmación de una acción destructiva sin depender de diálogos nativos del navegador
+   (que los frameworks de automatización suelen descartar y que no combinan con el resto de la UI). *@
+
+<div class="d-inline-flex align-items-center gap-2 border border-danger rounded p-2">
+    <span class="text-danger small">@Mensaje</span>
+    <button class="btn btn-sm btn-danger" @onclick="OnConfirmar" disabled="@Procesando">Sí, continuar</button>
+    <button class="btn btn-sm btn-outline-secondary" @onclick="OnCancelar" disabled="@Procesando">Cancelar</button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Mensaje { get; set; } = "";
+
+    [Parameter]
+    public bool Procesando { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnConfirmar { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnCancelar { get; set; }
+}
