@@ -24,6 +24,14 @@ main {
         top: 0;
     }
 
+    main {
+        /* Flex items default to min-width: auto, so they refuse to shrink below
+           the intrinsic width of their content (e.g. a grid with several columns),
+           pushing the whole page wider than the viewport. This lets main actually
+           shrink to fit next to the sidebar instead of forcing horizontal scroll. */
+        min-width: 0;
+    }
+
     article {
         padding-left: 2rem !important;
         padding-right: 1.5rem !important;

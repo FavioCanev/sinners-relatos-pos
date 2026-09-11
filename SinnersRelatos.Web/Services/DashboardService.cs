@@ -7,7 +7,7 @@ namespace SinnersRelatos.Web.Services;
 
 public class DashboardService(AppDbContext context) : IDashboardService
 {
-    public async Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta)
+    public async Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta, Marca? marca = null)
     {
         var pedidos = await context.Pedidos
             .Where(p => p.Estado == EstadoPedido.Cerrado && p.FechaCreacion >= desde && p.FechaCreacion <= hasta)
@@ -22,18 +22,25 @@ public class DashboardService(AppDbContext context) : IDashboardService
         decimal TotalDetalle(DetallePedido d) =>
             d.Cantidad * (d.PrecioUnitario + d.Modificadores.Sum(m => m.PrecioAdicional));
 
-        var totalVentas = pedidos.Sum(p => p.Detalles.Sum(TotalDetalle));
-        var cantidadPedidos = pedidos.Count;
+        // Un mismo pedido puede incluir productos de ambas marcas (ej. una mesa de Sinners
+        // que también pide algo de Relatos), así que el filtro se aplica por línea de
+        // detalle y no descartando el pedido completo.
+        var detallesFiltrados = pedidos
+            .SelectMany(p => p.Detalles.Select(d => (Pedido: p, Detalle: d)))
+            .Where(x => marca is null || x.Detalle.Producto.Marca == marca)
+            .ToList();
 
-        var ventasPorDia = pedidos
-            .GroupBy(p => DateOnly.FromDateTime(p.FechaCreacion))
-            .Select(g => new VentaPorDia { Fecha = g.Key, Total = g.Sum(p => p.Detalles.Sum(TotalDetalle)) })
+        var totalVentas = detallesFiltrados.Sum(x => TotalDetalle(x.Detalle));
+        var cantidadPedidos = detallesFiltrados.Select(x => x.Pedido.Id).Distinct().Count();
+
+        var ventasPorDia = detallesFiltrados
+            .GroupBy(x => DateOnly.FromDateTime(x.Pedido.FechaCreacion))
+            .Select(g => new VentaPorDia { Fecha = g.Key, Total = g.Sum(x => TotalDetalle(x.Detalle)) })
             .OrderBy(v => v.Fecha)
             .ToList();
 
-        var todosLosDetalles = pedidos.SelectMany(p => p.Detalles).ToList();
-
-        var topProductos = todosLosDetalles
+        var topProductos = detallesFiltrados
+            .Select(x => x.Detalle)
             .GroupBy(d => d.Producto)
             .Select(g => new ProductoMasPedido
             {
@@ -45,7 +52,10 @@ public class DashboardService(AppDbContext context) : IDashboardService
             .Take(8)
             .ToList();
 
-        var ventasPorMarca = todosLosDetalles
+        // Se calcula siempre sobre todas las marcas (sin aplicar el filtro) para que la
+        // comparación Sinners vs. Relatos siga siendo útil aunque se esté filtrando.
+        var ventasPorMarca = pedidos
+            .SelectMany(p => p.Detalles)
             .GroupBy(d => d.Producto.Marca)
             .Select(g => new VentaPorMarca { Marca = g.Key, Total = g.Sum(TotalDetalle) })
             .OrderBy(v => v.Marca)
@@ -63,10 +73,10 @@ public class DashboardService(AppDbContext context) : IDashboardService
         };
     }
 
-    public async Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync()
+    public async Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync(Marca? marca = null)
     {
         var productos = await context.Productos
-            .Where(p => p.Activo && p.Receta.Any())
+            .Where(p => p.Activo && p.Receta.Any() && (marca == null || p.Marca == marca))
             .Include(p => p.Categoria)
             .Include(p => p.Receta).ThenInclude(r => r.Ingrediente)
             .ToListAsync();

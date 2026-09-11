@@ -48,6 +48,6 @@ public class CategoriaStock
 
 public interface IDashboardService
 {
-    Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta);
-    Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync();
+    Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta, Marca? marca = null);
+    Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync(Marca? marca = null);
 }
