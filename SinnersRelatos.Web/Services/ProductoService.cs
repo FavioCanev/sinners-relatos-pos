@@ -5,10 +5,12 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class ProductoService(AppDbContext context, IAuditoriaService auditoria) : IProductoService
+public class ProductoService(IDbContextFactory<AppDbContext> contextFactory, IAuditoriaService auditoria) : IProductoService
 {
     public async Task<List<Producto>> ListarAsync(Marca? marca = null, int? categoriaId = null, bool incluirInactivos = false)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var query = context.Productos
             .Include(p => p.Categoria)
             .Include(p => p.GruposModificadores).ThenInclude(pg => pg.GrupoModificador).ThenInclude(g => g.Opciones)
@@ -24,15 +26,20 @@ public class ProductoService(AppDbContext context, IAuditoriaService auditoria) 
         return await query.OrderBy(p => p.Categoria.Nombre).ThenBy(p => p.Nombre).ToListAsync();
     }
 
-    public async Task<Producto?> ObtenerPorIdAsync(int id) =>
-        await context.Productos
+    public async Task<Producto?> ObtenerPorIdAsync(int id)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Productos
             .Include(p => p.Categoria)
             .Include(p => p.GruposModificadores).ThenInclude(pg => pg.GrupoModificador)
             .Include(p => p.Receta).ThenInclude(r => r.Ingrediente)
             .FirstOrDefaultAsync(p => p.Id == id);
+    }
 
     public async Task<Producto> CrearAsync(Producto producto, IEnumerable<int> grupoModificadorIds, IReadOnlyDictionary<int, decimal> receta, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         context.Productos.Add(producto);
         await context.SaveChangesAsync();
 
@@ -65,6 +72,8 @@ public class ProductoService(AppDbContext context, IAuditoriaService auditoria) 
 
     public async Task ActualizarAsync(Producto producto, IEnumerable<int> grupoModificadorIds, IReadOnlyDictionary<int, decimal> receta, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var existente = await context.Productos
             .Include(p => p.GruposModificadores)
             .Include(p => p.Receta)
@@ -114,6 +123,8 @@ public class ProductoService(AppDbContext context, IAuditoriaService auditoria) 
 
     public async Task CambiarEstadoAsync(int id, bool activo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var producto = await context.Productos.FindAsync(id)
             ?? throw new InvalidOperationException($"Producto {id} no encontrado.");
 

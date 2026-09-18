@@ -1,4 +1,5 @@
 @page "/productos"
+@inherits PaginaDeAdministrador
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
 @using SinnersRelatos.Web.Models
@@ -7,8 +8,6 @@
 @inject ICategoriaService CategoriaService
 @inject IModificadorService ModificadorService
 @inject IIngredienteService IngredienteService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Productos</PageTitle>
 
@@ -232,22 +231,8 @@ else
             ? productos
             : productos.Where(p => p.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
 
-    private UsuarioSesion? usuarioActor;
-
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedConSesionAsync()
     {
-        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/productos");
-            return;
-        }
-        if (usuarioActor.Rol != RolUsuario.Administrador)
-        {
-            Navigation.NavigateTo("/mesas");
-            return;
-        }
-
         categorias = await CategoriaService.ListarAsync(incluirInactivas: true);
         grupos = await ModificadorService.ListarGruposAsync();
         ingredientes = await IngredienteService.ListarAsync();

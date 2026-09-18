@@ -1,11 +1,10 @@
 @page "/mesas/{MarcaTexto}"
+@inherits PaginaConSesion
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IMesaService MesaService
 @inject IPedidoService PedidoService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Mesas - @NombreLocal</PageTitle>
 
@@ -235,7 +234,6 @@ else
     private bool marcaInvalida;
     private bool cargando = true;
     private List<MesaEstado> mesas = [];
-    private UsuarioSesion? usuario;
 
     private bool modoFusion;
     private List<int> mesasSeleccionadas = [];
@@ -285,7 +283,6 @@ else
 
         cargando = true;
         mesas = await MesaService.ListarPorMarcaAsync(marca);
-        usuario = await SesionService.ObtenerUsuarioActualAsync();
         cargando = false;
     }
 
@@ -322,7 +319,7 @@ else
 
     private async Task FusionarAsync()
     {
-        if (usuario is null)
+        if (usuarioActor is null)
         {
             Navigation.NavigateTo($"/login?returnUrl=/mesas/{MarcaTexto}");
             return;
@@ -330,7 +327,7 @@ else
 
         try
         {
-            await PedidoService.FusionarAsync(mesasSeleccionadas, usuario.Id);
+            await PedidoService.FusionarAsync(mesasSeleccionadas, usuarioActor.Id);
             Navigation.NavigateTo($"/pedido/mesa/{mesasSeleccionadas[0]}");
         }
         catch (InvalidOperationException ex)

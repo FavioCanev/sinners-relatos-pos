@@ -1,11 +1,10 @@
 @page "/auditoria"
+@inherits PaginaDeAdministrador
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IAuditoriaService AuditoriaService
 @inject IUsuarioService UsuarioService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Auditoría</PageTitle>
 
@@ -89,20 +88,8 @@ else
     private string usuarioIdTexto = "";
     private string tipoAccion = "";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedConSesionAsync()
     {
-        var usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/auditoria");
-            return;
-        }
-        if (usuarioActor.Rol != RolUsuario.Administrador)
-        {
-            Navigation.NavigateTo("/mesas");
-            return;
-        }
-
         usuarios = await UsuarioService.ListarAsync(incluirInactivos: true);
         tiposAccion = await AuditoriaService.ListarTiposAccionAsync();
         await CargarAsync();

@@ -5,21 +5,29 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class ModificadorService(AppDbContext context, IAuditoriaService auditoria) : IModificadorService
+public class ModificadorService(IDbContextFactory<AppDbContext> contextFactory, IAuditoriaService auditoria) : IModificadorService
 {
-    public async Task<List<GrupoModificador>> ListarGruposAsync() =>
-        await context.GruposModificadores
+    public async Task<List<GrupoModificador>> ListarGruposAsync()
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.GruposModificadores
             .Include(g => g.Opciones).ThenInclude(o => o.Recetas).ThenInclude(r => r.Ingrediente)
             .Include(g => g.Opciones).ThenInclude(o => o.Recetas).ThenInclude(r => r.Producto)
             .Include(g => g.Productos).ThenInclude(pg => pg.Producto)
             .OrderBy(g => g.Nombre)
             .ToListAsync();
+    }
 
-    public async Task<GrupoModificador?> ObtenerGrupoPorIdAsync(int id) =>
-        await context.GruposModificadores.Include(g => g.Opciones).FirstOrDefaultAsync(g => g.Id == id);
+    public async Task<GrupoModificador?> ObtenerGrupoPorIdAsync(int id)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.GruposModificadores.Include(g => g.Opciones).FirstOrDefaultAsync(g => g.Id == id);
+    }
 
     public async Task<GrupoModificador> CrearGrupoAsync(string nombre, bool esObligatorio, bool permiteMultiple, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var enUso = await context.GruposModificadores.AnyAsync(g => g.Nombre == nombre);
         if (enUso)
             throw new InvalidOperationException($"El grupo modificador '{nombre}' ya existe.");
@@ -34,6 +42,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task ActualizarGrupoAsync(int id, string nombre, bool esObligatorio, bool permiteMultiple, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var grupo = await context.GruposModificadores.FindAsync(id)
             ?? throw new InvalidOperationException($"Grupo modificador {id} no encontrado.");
 
@@ -51,6 +61,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task EliminarGrupoAsync(int id, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var enUso = await context.ProductosGruposModificadores.AnyAsync(pg => pg.GrupoModificadorId == id);
         if (enUso)
             throw new InvalidOperationException("No se puede eliminar: el grupo está asignado a uno o más productos.");
@@ -66,6 +78,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task<OpcionModificador> AgregarOpcionAsync(int grupoId, string nombre, decimal precioAdicional, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var opcion = new OpcionModificador { GrupoModificadorId = grupoId, Nombre = nombre, PrecioAdicional = precioAdicional };
         context.OpcionesModificadores.Add(opcion);
         await context.SaveChangesAsync();
@@ -76,6 +90,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task ActualizarOpcionAsync(int opcionId, string nombre, decimal precioAdicional, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
             ?? throw new InvalidOperationException($"Opción {opcionId} no encontrada.");
 
@@ -88,6 +104,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task CambiarEstadoOpcionAsync(int opcionId, bool activo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
             ?? throw new InvalidOperationException($"Opción {opcionId} no encontrada.");
 
@@ -100,6 +118,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task AsignarIngredienteAsync(int opcionId, int ingredienteId, decimal cantidadRequerida, int? productoId, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var opcion = await context.OpcionesModificadores.FindAsync(opcionId)
             ?? throw new InvalidOperationException($"Opción {opcionId} no encontrada.");
         var ingrediente = await context.Ingredientes.FindAsync(ingredienteId)
@@ -140,6 +160,8 @@ public class ModificadorService(AppDbContext context, IAuditoriaService auditori
 
     public async Task QuitarIngredienteAsync(int opcionId, int ingredienteId, int? productoId, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var receta = await context.RecetasOpcionModificador
             .Include(r => r.Ingrediente)
             .Include(r => r.OpcionModificador)

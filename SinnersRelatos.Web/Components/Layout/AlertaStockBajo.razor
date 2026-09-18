@@ -1,8 +1,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
-@using Microsoft.Extensions.DependencyInjection
 @using SinnersRelatos.Web.Hubs
 @using SinnersRelatos.Web.Services.Interfaces
-@inject IServiceScopeFactory ScopeFactory
+@inject IIngredienteService IngredienteService
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -14,6 +13,7 @@
 @code {
     private int cantidad;
     private DotNetObjectReference<AlertaStockBajo>? referencia;
+    private int? tokenSuscripcion;
 
     protected override async Task OnInitializedAsync() => await RecalcularAsync();
 
@@ -23,7 +23,7 @@
             return;
 
         referencia = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.AlertaStockActualizada, referencia, nameof(OnAlertaStockActualizada));
+        tokenSuscripcion = await JS.InvokeAsync<int>("comandaHub.subscribe", ComandaEventos.AlertaStockActualizada, referencia, nameof(OnAlertaStockActualizada));
     }
 
     [JSInvokable]
@@ -35,17 +35,28 @@
 
     private async Task RecalcularAsync()
     {
-        // Runs in its own DI scope: this component renders alongside the page's own
-        // scoped AppDbContext, and EF Core's DbContext cannot handle concurrent operations.
-        using var scope = ScopeFactory.CreateScope();
-        var ingredienteService = scope.ServiceProvider.GetRequiredService<IIngredienteService>();
-        var bajoStock = await ingredienteService.ListarBajoStockAsync();
+        // IngredienteService crea su propio DbContext por llamada (ver IDbContextFactory en
+        // Program.cs), así que ya no hace falta resolverlo en un scope de DI aparte para evitar
+        // pisar el DbContext de la página: no comparte ninguno.
+        var bajoStock = await IngredienteService.ListarBajoStockAsync();
         cantidad = bajoStock.Count;
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         referencia?.Dispose();
-        return ValueTask.CompletedTask;
+
+        if (tokenSuscripcion is { } token)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("comandaHub.unsubscribe", token);
+            }
+            catch (JSDisconnectedException)
+            {
+                // El circuito ya se cerró (ej. el usuario cerró la pestaña): no hay a quién
+                // avisar ni falta hacerlo, la conexión de SignalR del cliente ya no existe.
+            }
+        }
     }
 }

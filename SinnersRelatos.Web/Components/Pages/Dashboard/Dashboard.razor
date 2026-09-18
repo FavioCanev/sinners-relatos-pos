@@ -1,10 +1,9 @@
 @page "/dashboard"
+@inherits PaginaDeAdministrador
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IDashboardService DashboardService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Dashboard</PageTitle>
@@ -226,20 +225,8 @@
     private bool datosListosParaRenderizar;
     private bool stockListoParaRenderizar;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedConSesionAsync()
     {
-        var usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/dashboard");
-            return;
-        }
-        if (usuarioActor.Rol != RolUsuario.Administrador)
-        {
-            Navigation.NavigateTo("/mesas");
-            return;
-        }
-
         await CargarStockAsync();
         await CargarAsync();
     }

@@ -62,10 +62,29 @@ else
                 @foreach (var d in yaConfirmados)
                 {
                     <li class="@(d.Estado == EstadoDetallePedido.Listo ? "item-listo" : "")">
-                        @d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")
-                        @if (d.Estado == EstadoDetallePedido.Listo)
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <span>
+                                @d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")
+                                @if (d.Estado == EstadoDetallePedido.Listo)
+                                {
+                                    <span class="badge-listo">✅ Listo para recoger</span>
+                                }
+                            </span>
+                            @if (detalleEliminando != d.Id)
+                            {
+                                <button class="btn btn-sm btn-link text-danger p-0" title="Quitar del pedido"
+                                        @onclick="() => detalleEliminando = d.Id" disabled="@eliminandoItem">✕</button>
+                            }
+                        </div>
+                        @if (detalleEliminando == d.Id)
                         {
-                            <span class="badge-listo">✅ Listo para recoger</span>
+                            <div class="mt-1">
+                                <ConfirmacionInline
+                                    Mensaje="@(d.Estado == EstadoDetallePedido.Listo ? "Ya se preparó: se quitará del pedido pero no se repone el stock. ¿Quitar igual?" : "¿Quitar este ítem del pedido? Se repondrá su stock.")"
+                                    Procesando="eliminandoItem"
+                                    OnConfirmar="() => EliminarItemAsync(d.Id)"
+                                    OnCancelar="() => detalleEliminando = null" />
+                            </div>
                         }
                     </li>
                 }
@@ -480,6 +499,8 @@ else
     private bool confirmandoCierre;
     private bool solicitandoImpresion;
     private bool impresionSolicitada;
+    private int? detalleEliminando;
+    private bool eliminandoItem;
 
     private List<LineaCarrito> carrito = [];
     private bool mostrandoCarrito;
@@ -496,6 +517,7 @@ else
         opcionesSeleccionadasModal.Any(id => disponibilidadOpciones.TryGetValue(id, out var dispOpcion) && !dispOpcion));
 
     private DotNetObjectReference<TomarPedido>? referenciaHub;
+    private int? tokenSuscripcion;
 
     private IEnumerable<Producto> ProductosVisibles =>
         string.IsNullOrWhiteSpace(busqueda)
@@ -507,13 +529,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var usuarioSesion = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioSesion is null)
+        usuario = await SesionService.ObtenerUsuarioActualAsync();
+        if (usuario is null)
         {
             Navigation.NavigateTo($"/login?returnUrl=/pedido/mesa/{MesaId}");
             return;
         }
-        usuario = usuarioSesion;
 
         mesa = await MesaService.ObtenerPorIdAsync(MesaId);
         if (mesa is null)
@@ -524,7 +545,7 @@ else
 
         marcaSeleccionada = mesa.Marca;
 
-        pedido = await PedidoService.ObtenerOCrearPedidoAsync(MesaId, usuario.Id);
+        pedido = await PedidoService.ObtenerOCrearPedidoAsync(MesaId, usuario!.Id);
         await CargarDetallePedidoAsync();
 
         productos = await ProductoService.ListarAsync();
@@ -541,7 +562,7 @@ else
             return;
 
         referenciaHub = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referenciaHub, nameof(OnPedidoActualizado));
+        tokenSuscripcion = await JS.InvokeAsync<int>("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referenciaHub, nameof(OnPedidoActualizado));
     }
 
     [JSInvokable]
@@ -691,6 +712,27 @@ else
         }
     }
 
+    private async Task EliminarItemAsync(int detallePedidoId)
+    {
+        eliminandoItem = true;
+        mensajeError = null;
+        try
+        {
+            await PedidoService.EliminarItemAsync(detallePedidoId, usuario!.Id);
+            await CargarDetallePedidoAsync();
+            disponibilidad = await PedidoService.VerificarDisponibilidadAsync(productos.Select(p => p.Id));
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        finally
+        {
+            detalleEliminando = null;
+            eliminandoItem = false;
+        }
+    }
+
     private async Task AnularPedidoAsync()
     {
         if (pedido is null)
@@ -720,10 +762,22 @@ else
         impresionSolicitada = true;
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         referenciaHub?.Dispose();
-        return ValueTask.CompletedTask;
+
+        if (tokenSuscripcion is { } token)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("comandaHub.unsubscribe", token);
+            }
+            catch (JSDisconnectedException)
+            {
+                // El circuito ya se cerró (ej. el usuario cerró la pestaña o navegó fuera):
+                // no hay a quién avisar ni falta hacerlo.
+            }
+        }
     }
 
     private class LineaCarrito

@@ -7,10 +7,12 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IAuditoriaService auditoria) : IPedidoService
+public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubContext<ComandaHub> hub, IAuditoriaService auditoria) : IPedidoService
 {
     public async Task<Pedido> ObtenerOCrearPedidoAsync(int mesaId, int usuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var existente = await context.PedidosMesas
             .Where(pm => pm.MesaId == mesaId && pm.Pedido.Estado == EstadoPedido.Pendiente)
             .Select(pm => pm.Pedido)
@@ -27,17 +29,22 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
         return pedido;
     }
 
-    public async Task<Pedido?> ObtenerConDetalleAsync(int pedidoId) =>
-        await context.Pedidos
+    public async Task<Pedido?> ObtenerConDetalleAsync(int pedidoId)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Pedidos
             .AsNoTracking()
             .Include(p => p.Usuario)
             .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
             .Include(p => p.Detalles).ThenInclude(d => d.Producto)
             .Include(p => p.Detalles).ThenInclude(d => d.Modificadores).ThenInclude(m => m.OpcionModificador)
             .FirstOrDefaultAsync(p => p.Id == pedidoId);
+    }
 
     public async Task<Dictionary<int, bool>> VerificarDisponibilidadAsync(IEnumerable<int> productoIds)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var ids = productoIds.ToList();
         var recetas = await context.RecetasProducto
             .Include(r => r.Ingrediente)
@@ -51,6 +58,8 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task<Dictionary<int, bool>> VerificarDisponibilidadOpcionesAsync(int productoId, IEnumerable<int> opcionIds)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var ids = opcionIds.ToList();
         var opciones = await context.OpcionesModificadores
             .Include(o => o.Recetas).ThenInclude(r => r.Ingrediente)
@@ -78,6 +87,14 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task ConfirmarItemsAsync(int pedidoId, IEnumerable<ItemCarrito> items, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
+        // Toda la confirmación corre en una única transacción: si un ítem falla a mitad del
+        // carrito (ej. sin stock), se revierten también los ítems anteriores ya escritos en
+        // este mismo carrito, en vez de dejar un pedido a medio confirmar con su stock ya
+        // descontado mientras el mesero ve un mensaje de error.
+        await using var transaction = await context.Database.BeginTransactionAsync();
+
         var pedido = await context.Pedidos.FindAsync(pedidoId)
             ?? throw new InvalidOperationException($"Pedido {pedidoId} no encontrado.");
 
@@ -165,6 +182,7 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
         }
 
         await context.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.ConfirmarPedido,
             $"Confirmó en el pedido #{pedidoId}: {string.Join(", ", resumen)}.");
@@ -180,26 +198,99 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task AnularAsync(int pedidoId, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var pedido = await context.Pedidos
             .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
+            .Include(p => p.Detalles).ThenInclude(d => d.Producto).ThenInclude(p => p.Receta).ThenInclude(r => r.Ingrediente)
+            .Include(p => p.Detalles).ThenInclude(d => d.Modificadores).ThenInclude(m => m.OpcionModificador).ThenInclude(o => o.Recetas).ThenInclude(r => r.Ingrediente)
             .FirstOrDefaultAsync(p => p.Id == pedidoId)
             ?? throw new InvalidOperationException($"Pedido {pedidoId} no encontrado.");
 
         var etiqueta = string.Join(" + ", pedido.Mesas.Select(pm =>
             $"{(pm.Mesa.Tipo == TipoMesa.Barra ? "Barra" : "Mesa")} {pm.Mesa.Numero}"));
 
+        // Al anular se devuelve al inventario todo lo que se había descontado al confirmar,
+        // para que el stock del sistema no quede permanentemente por debajo del real.
+        RestaurarStockDePedido(pedido);
+
         pedido.Estado = EstadoPedido.Anulado;
         pedido.FechaCierre = DateTime.Now;
         await context.SaveChangesAsync();
 
         await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.AnularPedido,
-            $"Anuló el pedido #{pedidoId} ({etiqueta}).");
+            $"Anuló el pedido #{pedidoId} ({etiqueta}) y repuso el stock consumido.");
 
         await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
+        if (pedido.Detalles.Count > 0)
+            await hub.Clients.All.SendAsync(ComandaEventos.AlertaStockActualizada);
+    }
+
+    // Suma de vuelta al stock lo que ConfirmarItemsAsync había descontado para cada línea del
+    // pedido: la receta del producto y las recetas aplicables de cada opción de modificador.
+    private static void RestaurarStockDePedido(Pedido pedido)
+    {
+        foreach (var detalle in pedido.Detalles)
+        {
+            foreach (var receta in detalle.Producto.Receta)
+                receta.Ingrediente.StockActual += receta.CantidadRequerida * detalle.Cantidad;
+
+            foreach (var modificador in detalle.Modificadores)
+            {
+                foreach (var receta in RecetasAplicables(modificador.OpcionModificador, detalle.ProductoId))
+                    receta.Ingrediente.StockActual += receta.CantidadRequerida * detalle.Cantidad;
+            }
+        }
+    }
+
+    public async Task EliminarItemAsync(int detallePedidoId, int actorUsuarioId)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
+        var detalle = await context.DetallesPedido
+            .Include(d => d.Pedido)
+            .Include(d => d.Producto).ThenInclude(p => p.Receta).ThenInclude(r => r.Ingrediente)
+            .Include(d => d.Modificadores).ThenInclude(m => m.OpcionModificador).ThenInclude(o => o.Recetas).ThenInclude(r => r.Ingrediente)
+            .FirstOrDefaultAsync(d => d.Id == detallePedidoId)
+            ?? throw new InvalidOperationException($"Ítem {detallePedidoId} no encontrado.");
+
+        if (detalle.Pedido.Estado != EstadoPedido.Pendiente)
+            throw new InvalidOperationException("No se puede quitar un ítem de un pedido que ya está cerrado o anulado.");
+
+        // Si la cocina/barra ya lo marcó "Listo", el ingrediente ya se usó físicamente aunque
+        // el cliente no se lo lleve: se quita del pedido pero no se repone el stock. Si todavía
+        // estaba pendiente de preparar, nunca se llegó a consumir y sí se repone.
+        var yaPreparado = detalle.Estado == EstadoDetallePedido.Listo;
+        if (!yaPreparado)
+        {
+            foreach (var receta in detalle.Producto.Receta)
+                receta.Ingrediente.StockActual += receta.CantidadRequerida * detalle.Cantidad;
+
+            foreach (var modificador in detalle.Modificadores)
+            {
+                foreach (var receta in RecetasAplicables(modificador.OpcionModificador, detalle.ProductoId))
+                    receta.Ingrediente.StockActual += receta.CantidadRequerida * detalle.Cantidad;
+            }
+        }
+
+        var descripcion = $"{detalle.Cantidad}x {detalle.Producto.Nombre}";
+        context.DetallesPedido.Remove(detalle); // cascada: también borra sus DetallePedidoModificador
+
+        await context.SaveChangesAsync();
+
+        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.EliminarItemPedido,
+            $"Quitó '{descripcion}' del pedido #{detalle.PedidoId}" +
+            (yaPreparado ? " (ya estaba preparado; no se repuso stock)." : " y repuso su stock."));
+
+        await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
+        if (!yaPreparado)
+            await hub.Clients.All.SendAsync(ComandaEventos.AlertaStockActualizada);
     }
 
     public async Task CerrarAsync(int pedidoId, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var pedido = await context.Pedidos
             .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
             .FirstOrDefaultAsync(p => p.Id == pedidoId)
@@ -224,9 +315,26 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
         if (ids.Count < 2)
             throw new InvalidOperationException("Selecciona al menos dos mesas para fusionar.");
 
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var pedidosPorMesa = new Dictionary<int, Pedido>();
         foreach (var mesaId in ids)
-            pedidosPorMesa[mesaId] = await ObtenerOCrearPedidoAsync(mesaId, usuarioId);
+        {
+            var existente = await context.PedidosMesas
+                .Where(pm => pm.MesaId == mesaId && pm.Pedido.Estado == EstadoPedido.Pendiente)
+                .Select(pm => pm.Pedido)
+                .FirstOrDefaultAsync();
+
+            if (existente is null)
+            {
+                existente = new Pedido { UsuarioId = usuarioId };
+                existente.Mesas.Add(new PedidoMesa { MesaId = mesaId });
+                context.Pedidos.Add(existente);
+                await context.SaveChangesAsync();
+            }
+
+            pedidosPorMesa[mesaId] = existente;
+        }
 
         var pedidoMaestro = pedidosPorMesa[ids[0]];
 
@@ -261,6 +369,8 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task<List<ItemKds>> ListarParaKdsAsync(DestinoPreparacion destino)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var detalles = await context.DetallesPedido
             .Include(d => d.Producto)
             .Include(d => d.Pedido).ThenInclude(p => p.Mesas).ThenInclude(pm => pm.Mesa)
@@ -286,6 +396,8 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task MarcarListoAsync(int detallePedidoId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var detalle = await context.DetallesPedido.FindAsync(detallePedidoId)
             ?? throw new InvalidOperationException($"Ítem {detallePedidoId} no encontrado.");
 
@@ -297,6 +409,8 @@ public class PedidoService(AppDbContext context, IHubContext<ComandaHub> hub, IA
 
     public async Task SolicitarImpresionAsync(int pedidoId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var pedido = await context.Pedidos
             .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
             .FirstOrDefaultAsync(p => p.Id == pedidoId)

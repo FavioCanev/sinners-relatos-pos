@@ -13,7 +13,13 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddSignalR();
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+// Se usa una fábrica de contextos (en vez de un DbContext con ciclo de vida Scoped) porque en
+// Blazor Server el ámbito "Scoped" dura todo el circuito del usuario, no una sola operación. Con
+// un único DbContext compartido, un evento de SignalR (ej. otro mesero confirmando un pedido)
+// puede intentar usarlo al mismo tiempo que la página actual, y EF Core no admite operaciones
+// concurrentes sobre la misma instancia. Cada servicio crea ahora su propio DbContext de corta
+// vida por operación a través de esta fábrica.
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
@@ -42,7 +48,8 @@ if (!app.Environment.IsDevelopment())
 else
 {
     using var scope = app.Services.CreateScope();
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+    await using var context = await contextFactory.CreateDbContextAsync();
     var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
     await context.Database.MigrateAsync();
     await DbSeeder.SeedAsync(context, passwordHasher);

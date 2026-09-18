@@ -1,4 +1,3 @@
-@rendermode InteractiveServer
 @using SinnersRelatos.Web.Hubs
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
@@ -170,6 +169,8 @@
     private List<ItemKds> items = [];
     private List<RegistroImpresion> registroImpresiones = [];
     private DotNetObjectReference<KdsPanel>? referencia;
+    private int? tokenPedidoActualizado;
+    private int? tokenSolicitudImpresion;
 
     private List<IGrouping<int, ItemKds>> Tickets =>
         items.GroupBy(i => i.PedidoId).OrderBy(g => g.Min(i => i.FechaCreacion)).ToList();
@@ -182,8 +183,8 @@
             return;
 
         referencia = DotNetObjectReference.Create(this);
-        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referencia, nameof(OnPedidoActualizado));
-        await JS.InvokeVoidAsync("comandaHub.subscribe", ComandaEventos.SolicitudImpresion, referencia, nameof(OnSolicitudImpresion));
+        tokenPedidoActualizado = await JS.InvokeAsync<int>("comandaHub.subscribe", ComandaEventos.PedidoActualizado, referencia, nameof(OnPedidoActualizado));
+        tokenSolicitudImpresion = await JS.InvokeAsync<int>("comandaHub.subscribe", ComandaEventos.SolicitudImpresion, referencia, nameof(OnSolicitudImpresion));
         esEstacionImpresion = await JS.InvokeAsync<bool>("comandaHub.esEstacionDeImpresion");
         StateHasChanged();
     }
@@ -224,10 +225,21 @@
         await CargarAsync();
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         referencia?.Dispose();
-        return ValueTask.CompletedTask;
+
+        try
+        {
+            if (tokenPedidoActualizado is { } tokenPedido)
+                await JS.InvokeVoidAsync("comandaHub.unsubscribe", tokenPedido);
+            if (tokenSolicitudImpresion is { } tokenImpresion)
+                await JS.InvokeVoidAsync("comandaHub.unsubscribe", tokenImpresion);
+        }
+        catch (JSDisconnectedException)
+        {
+            // El circuito ya se cerró (ej. el usuario cerró la pestaña): no hay a quién avisar.
+        }
     }
 
     private class RegistroImpresion

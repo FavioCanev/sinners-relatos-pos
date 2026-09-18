@@ -3,6 +3,13 @@ window.comandaHub = (function () {
     let starting = null;
     const CLAVE_ESTACION = "sinnersRelatos.esEstacionImpresion";
 
+    // Cada suscripción se registra con un token propio para poder desuscribirla más tarde con
+    // conn.off(eventName, handler) — sin esto, cada navegación (Mesas → Pedido → Mesas → Pedido)
+    // dejaba un handler apuntando a un componente Blazor ya destruido, y con el tiempo cada
+    // evento del hub terminaba invocando decenas de referencias muertas.
+    let contadorSuscripciones = 0;
+    const suscripciones = new Map();
+
     async function ensureConnected() {
         if (connection && connection.state === signalR.HubConnectionState.Connected) {
             return connection;
@@ -28,7 +35,22 @@ window.comandaHub = (function () {
 
     async function subscribe(eventName, dotnetHelper, methodName) {
         const conn = await ensureConnected();
-        conn.on(eventName, (...args) => dotnetHelper.invokeMethodAsync(methodName, ...args));
+        const handler = (...args) => dotnetHelper.invokeMethodAsync(methodName, ...args);
+        conn.on(eventName, handler);
+
+        const token = ++contadorSuscripciones;
+        suscripciones.set(token, { eventName, handler });
+        return token;
+    }
+
+    function unsubscribe(token) {
+        const suscripcion = suscripciones.get(token);
+        if (!suscripcion) return;
+
+        suscripciones.delete(token);
+        if (connection) {
+            connection.off(suscripcion.eventName, suscripcion.handler);
+        }
     }
 
     function esEstacionDeImpresion() {
@@ -47,5 +69,5 @@ window.comandaHub = (function () {
         setTimeout(() => iframe.remove(), 15000);
     }
 
-    return { subscribe, esEstacionDeImpresion, marcarEstacionDeImpresion, imprimirSilencioso };
+    return { subscribe, unsubscribe, esEstacionDeImpresion, marcarEstacionDeImpresion, imprimirSilencioso };
 })();

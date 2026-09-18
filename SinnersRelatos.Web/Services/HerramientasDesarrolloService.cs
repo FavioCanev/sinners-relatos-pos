@@ -8,13 +8,11 @@ using SinnersRelatos.Web.Services.Interfaces;
 namespace SinnersRelatos.Web.Services;
 
 public class HerramientasDesarrolloService(
-    AppDbContext context,
+    IDbContextFactory<AppDbContext> contextFactory,
     IPedidoService pedidoService,
     IHubContext<ComandaHub> hub,
     IAuditoriaService auditoria) : IHerramientasDesarrolloService
 {
-    private const string NombreUsuarioMeseroPruebas = "mesero.pruebas";
-
     // Valores de referencia para poder recargar rápido un inventario razonable
     // durante pruebas, sin depender de la planilla de costeo original.
     private static readonly (string Nombre, decimal StockActual, decimal StockMinimo)[] StockDePrueba =
@@ -112,7 +110,8 @@ public class HerramientasDesarrolloService(
 
     public async Task CambiarModoPruebasAsync(bool activo, int actorUsuarioId)
     {
-        var config = await ObtenerConfiguracionAsync();
+        await using var context = await contextFactory.CreateDbContextAsync();
+        var config = await ObtenerConfiguracionAsync(context);
         config.ModoPruebasActivo = activo;
         config.ModoPruebasActivadoEn = activo ? DateTime.Now : null;
         config.ModoPruebasActivadoPorUsuarioId = activo ? actorUsuarioId : null;
@@ -124,6 +123,9 @@ public class HerramientasDesarrolloService(
 
     public async Task VaciarStockAsync(int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        await ExigirModoPruebasActivoAsync(context);
+
         var ingredientes = await context.Ingredientes.ToListAsync();
         foreach (var ingrediente in ingredientes)
             ingrediente.StockActual = 0;
@@ -137,6 +139,9 @@ public class HerramientasDesarrolloService(
 
     public async Task CargarStockDePruebaAsync(int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        await ExigirModoPruebasActivoAsync(context);
+
         var ingredientesPorNombre = await context.Ingredientes.ToDictionaryAsync(i => i.Nombre);
 
         var actualizados = 0;
@@ -159,20 +164,28 @@ public class HerramientasDesarrolloService(
 
     public async Task<int> SimularPedidosAsync(int cantidad, int actorUsuarioId)
     {
+        await using (var contextValidacion = await contextFactory.CreateDbContextAsync())
+            await ExigirModoPruebasActivoAsync(contextValidacion);
+
         cantidad = Math.Clamp(cantidad, 1, 100);
 
         var meseroId = await ObtenerIdMeseroPruebasAsync()
             ?? throw new InvalidOperationException(
                 "No se encontró el usuario 'Mesero de Pruebas'. Reinicia la aplicación para que se cree automáticamente.");
 
-        var mesas = await context.Mesas.Where(m => m.Activo).ToListAsync();
+        List<Mesa> mesas;
+        List<Producto> productos;
+        await using (var context = await contextFactory.CreateDbContextAsync())
+        {
+            mesas = await context.Mesas.Where(m => m.Activo).ToListAsync();
+            productos = await context.Productos
+                .Include(p => p.GruposModificadores).ThenInclude(pg => pg.GrupoModificador).ThenInclude(g => g.Opciones)
+                .Where(p => p.Activo)
+                .ToListAsync();
+        }
+
         if (mesas.Count == 0)
             throw new InvalidOperationException("No hay mesas activas para simular pedidos.");
-
-        var productos = await context.Productos
-            .Include(p => p.GruposModificadores).ThenInclude(pg => pg.GrupoModificador).ThenInclude(g => g.Opciones)
-            .Where(p => p.Activo)
-            .ToListAsync();
 
         var random = Random.Shared;
         var pedidosCreados = 0;
@@ -218,6 +231,9 @@ public class HerramientasDesarrolloService(
 
     public async Task<int> EliminarPedidosDePruebaAsync(int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        await ExigirModoPruebasActivoAsync(context);
+
         var meseroId = await ObtenerIdMeseroPruebasAsync();
         if (meseroId is null)
             return 0;
@@ -261,8 +277,9 @@ public class HerramientasDesarrolloService(
 
     private async Task<int?> ObtenerIdMeseroPruebasAsync()
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
         var id = await context.Usuarios
-            .Where(u => u.NombreUsuario == NombreUsuarioMeseroPruebas)
+            .Where(u => u.NombreUsuario == UsuariosSistema.MeseroPruebas)
             .Select(u => u.Id)
             .FirstOrDefaultAsync();
 
@@ -270,6 +287,12 @@ public class HerramientasDesarrolloService(
     }
 
     private async Task<ConfiguracionSistema> ObtenerConfiguracionAsync()
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await ObtenerConfiguracionAsync(context);
+    }
+
+    private static async Task<ConfiguracionSistema> ObtenerConfiguracionAsync(AppDbContext context)
     {
         var config = await context.ConfiguracionSistema.FirstOrDefaultAsync();
         if (config is null)
@@ -279,5 +302,16 @@ public class HerramientasDesarrolloService(
             await context.SaveChangesAsync();
         }
         return config;
+    }
+
+    // Defensa en el servidor: el interruptor de "Modo de pruebas" en la UI solo evita que se
+    // vean los botones, pero no impedía llamar a estos métodos directamente. Sin esta
+    // validación, cualquier fallo o mal uso de la UI podía vaciar el stock real o crear pedidos
+    // simulados sin que el modo de pruebas estuviera realmente activo.
+    private static async Task ExigirModoPruebasActivoAsync(AppDbContext context)
+    {
+        var config = await ObtenerConfiguracionAsync(context);
+        if (!config.ModoPruebasActivo)
+            throw new InvalidOperationException("El modo de pruebas no está activo. Actívalo antes de usar estas herramientas.");
     }
 }

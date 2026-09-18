@@ -7,10 +7,12 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hub, IAuditoriaService auditoria) : IIngredienteService
+public class IngredienteService(IDbContextFactory<AppDbContext> contextFactory, IHubContext<ComandaHub> hub, IAuditoriaService auditoria) : IIngredienteService
 {
     public async Task<List<Ingrediente>> ListarAsync(bool incluirInactivos = false)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var query = context.Ingredientes.AsQueryable();
         if (!incluirInactivos)
             query = query.Where(i => i.Activo);
@@ -18,11 +20,16 @@ public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hu
         return await query.OrderBy(i => i.Nombre).ToListAsync();
     }
 
-    public async Task<Ingrediente?> ObtenerPorIdAsync(int id) =>
-        await context.Ingredientes.FirstOrDefaultAsync(i => i.Id == id);
+    public async Task<Ingrediente?> ObtenerPorIdAsync(int id)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Ingredientes.FirstOrDefaultAsync(i => i.Id == id);
+    }
 
     public async Task<Ingrediente> CrearAsync(string nombre, string unidadMedida, decimal stockInicial, decimal stockMinimo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var enUso = await context.Ingredientes.AnyAsync(i => i.Nombre == nombre);
         if (enUso)
             throw new InvalidOperationException($"El ingrediente '{nombre}' ya existe.");
@@ -46,6 +53,8 @@ public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hu
 
     public async Task ActualizarAsync(int id, string nombre, string unidadMedida, decimal stockMinimo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var ingrediente = await context.Ingredientes.FindAsync(id)
             ?? throw new InvalidOperationException($"Ingrediente {id} no encontrado.");
 
@@ -63,6 +72,8 @@ public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hu
 
     public async Task AjustarStockAsync(int id, decimal cantidad, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var ingrediente = await context.Ingredientes.FindAsync(id)
             ?? throw new InvalidOperationException($"Ingrediente {id} no encontrado.");
 
@@ -79,6 +90,8 @@ public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hu
 
     public async Task CambiarEstadoAsync(int id, bool activo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var ingrediente = await context.Ingredientes.FindAsync(id)
             ?? throw new InvalidOperationException($"Ingrediente {id} no encontrado.");
 
@@ -89,9 +102,12 @@ public class IngredienteService(AppDbContext context, IHubContext<ComandaHub> hu
             $"{(activo ? "Activó" : "Desactivó")} el ingrediente '{ingrediente.Nombre}'.");
     }
 
-    public async Task<List<Ingrediente>> ListarBajoStockAsync() =>
-        await context.Ingredientes
+    public async Task<List<Ingrediente>> ListarBajoStockAsync()
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Ingredientes
             .Where(i => i.Activo && i.StockMinimo > 0 && i.StockActual <= i.StockMinimo)
             .OrderBy(i => i.Nombre)
             .ToListAsync();
+    }
 }

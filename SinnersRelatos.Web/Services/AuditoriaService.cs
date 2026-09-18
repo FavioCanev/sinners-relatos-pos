@@ -5,10 +5,11 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class AuditoriaService(AppDbContext context) : IAuditoriaService
+public class AuditoriaService(IDbContextFactory<AppDbContext> contextFactory) : IAuditoriaService
 {
     public async Task RegistrarAsync(int? usuarioId, string tipoAccion, string detalle)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
         context.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = usuarioId,
@@ -24,6 +25,8 @@ public class AuditoriaService(AppDbContext context) : IAuditoriaService
         int? usuarioId = null,
         string? tipoAccion = null)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var query = context.LogsAuditoria
             .Include(l => l.Usuario).ThenInclude(u => u!.Empleado)
             .AsQueryable();
@@ -40,6 +43,9 @@ public class AuditoriaService(AppDbContext context) : IAuditoriaService
         return await query.OrderByDescending(l => l.FechaHora).Take(500).ToListAsync();
     }
 
-    public async Task<List<string>> ListarTiposAccionAsync() =>
-        await context.LogsAuditoria.Select(l => l.TipoAccion).Distinct().OrderBy(t => t).ToListAsync();
+    public async Task<List<string>> ListarTiposAccionAsync()
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.LogsAuditoria.Select(l => l.TipoAccion).Distinct().OrderBy(t => t).ToListAsync();
+    }
 }
