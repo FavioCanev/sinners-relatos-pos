@@ -1,10 +1,9 @@
 @page "/mi-cuenta"
+@inherits PaginaConSesion
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IUsuarioService UsuarioService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Mi Cuenta</PageTitle>
 
@@ -52,48 +51,11 @@ else
                             @(cambiandoPassword ? "Guardando..." : "Cambiar contraseña")
                         </button>
                     </EditForm>
-                </div>
-            </div>
-        </div>
 
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Pregunta de seguridad</h5>
-                    <p class="text-muted small">
-                        Se usa para recuperar tu contraseña desde la pantalla de inicio de sesión si la olvidas.
-                        @(preguntaActual is not null ? $"Pregunta actual: \"{preguntaActual}\"." : "Todavía no tienes una configurada.")
+                    <p class="text-muted small mt-3 mb-0">
+                        ¿Olvidaste tu contraseña? Pide a un administrador que te la restablezca desde
+                        "Usuarios y Empleados".
                     </p>
-
-                    @if (mensajeExitoPregunta is not null)
-                    {
-                        <div class="alert alert-success py-2">@mensajeExitoPregunta</div>
-                    }
-                    @if (mensajeErrorPregunta is not null)
-                    {
-                        <div class="alert alert-danger py-2">@mensajeErrorPregunta</div>
-                    }
-
-                    <EditForm Model="formPregunta" OnValidSubmit="ConfigurarPreguntaAsync">
-                        <DataAnnotationsValidator />
-
-                        <div class="mb-2">
-                            <label class="form-label">Pregunta</label>
-                            <InputText class="form-control" @bind-Value="formPregunta.Pregunta" placeholder="Ej: ¿Cuál es el nombre de mi mascota?" />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Respuesta</label>
-                            <InputText class="form-control" @bind-Value="formPregunta.Respuesta" />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Confirmar respuesta</label>
-                            <InputText class="form-control" @bind-Value="formPregunta.ConfirmarRespuesta" />
-                        </div>
-
-                        <button type="submit" class="btn btn-primary" disabled="@guardandoPregunta">
-                            @(guardandoPregunta ? "Guardando..." : "Guardar pregunta de seguridad")
-                        </button>
-                    </EditForm>
                 </div>
             </div>
         </div>
@@ -101,31 +63,11 @@ else
 }
 
 @code {
-    private UsuarioSesion? usuarioActor;
-    private string? preguntaActual;
-
     private readonly FormularioPassword formPassword = new();
-    private readonly FormularioPregunta formPregunta = new();
 
     private bool cambiandoPassword;
-    private bool guardandoPregunta;
     private string? mensajeErrorPassword;
     private string? mensajeExitoPassword;
-    private string? mensajeErrorPregunta;
-    private string? mensajeExitoPregunta;
-
-    protected override async Task OnInitializedAsync()
-    {
-        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/mi-cuenta");
-            return;
-        }
-
-        var usuario = await UsuarioService.ObtenerPorIdAsync(usuarioActor.Id);
-        preguntaActual = usuario?.PreguntaSeguridad;
-    }
 
     private async Task CambiarPasswordAsync()
     {
@@ -150,22 +92,6 @@ else
         mensajeExitoPassword = "Contraseña actualizada.";
     }
 
-    private async Task ConfigurarPreguntaAsync()
-    {
-        guardandoPregunta = true;
-        mensajeErrorPregunta = null;
-        mensajeExitoPregunta = null;
-
-        await UsuarioService.ConfigurarPreguntaSeguridadAsync(usuarioActor!.Id, formPregunta.Pregunta, formPregunta.Respuesta);
-        preguntaActual = formPregunta.Pregunta;
-
-        guardandoPregunta = false;
-        formPregunta.Pregunta = "";
-        formPregunta.Respuesta = "";
-        formPregunta.ConfirmarRespuesta = "";
-        mensajeExitoPregunta = "Pregunta de seguridad guardada.";
-    }
-
     private class FormularioPassword
     {
         [Required(ErrorMessage = "Ingresa tu contraseña actual")]
@@ -178,18 +104,5 @@ else
         [Required(ErrorMessage = "Confirma tu nueva contraseña")]
         [Compare(nameof(NuevaPassword), ErrorMessage = "Las contraseñas no coinciden")]
         public string ConfirmarPassword { get; set; } = "";
-    }
-
-    private class FormularioPregunta
-    {
-        [Required(ErrorMessage = "Ingresa una pregunta")]
-        public string Pregunta { get; set; } = "";
-
-        [Required(ErrorMessage = "Ingresa una respuesta")]
-        public string Respuesta { get; set; } = "";
-
-        [Required(ErrorMessage = "Confirma tu respuesta")]
-        [Compare(nameof(Respuesta), ErrorMessage = "Las respuestas no coinciden")]
-        public string ConfirmarRespuesta { get; set; } = "";
     }
 }

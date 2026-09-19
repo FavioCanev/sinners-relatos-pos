@@ -1,10 +1,9 @@
 @page "/herramientas-desarrollo"
+@inherits PaginaDeAdministrador
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IHerramientasDesarrolloService HerramientasService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Herramientas de Desarrollo</PageTitle>
 
@@ -126,7 +125,6 @@ else
 }
 
 @code {
-    private UsuarioSesion? usuarioActor;
     private bool cargando = true;
     private bool procesando;
     private bool modoPruebasActivo;
@@ -135,20 +133,8 @@ else
     private string? mensajeError;
     private string? accionConfirmando;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedConSesionAsync()
     {
-        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/herramientas-desarrollo");
-            return;
-        }
-        if (usuarioActor.Rol != RolUsuario.Administrador)
-        {
-            Navigation.NavigateTo("/mesas");
-            return;
-        }
-
         modoPruebasActivo = await HerramientasService.ObtenerModoPruebasAsync();
         cargando = false;
     }

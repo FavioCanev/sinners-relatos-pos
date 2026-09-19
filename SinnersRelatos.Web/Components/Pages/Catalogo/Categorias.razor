@@ -1,11 +1,10 @@
 @page "/categorias"
+@inherits PaginaDeAdministrador
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject ICategoriaService CategoriaService
-@inject ISesionService SesionService
-@inject NavigationManager Navigation
 
 <PageTitle>Categorías</PageTitle>
 
@@ -110,22 +109,8 @@ else
     private string? mensajeError;
     private FormularioCategoria formulario = new();
 
-    private UsuarioSesion? usuarioActor;
-
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnInitializedConSesionAsync()
     {
-        usuarioActor = await SesionService.ObtenerUsuarioActualAsync();
-        if (usuarioActor is null)
-        {
-            Navigation.NavigateTo("/login?returnUrl=/categorias");
-            return;
-        }
-        if (usuarioActor.Rol != RolUsuario.Administrador)
-        {
-            Navigation.NavigateTo("/mesas");
-            return;
-        }
-
         await CargarAsync();
     }
 

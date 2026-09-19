@@ -11,7 +11,7 @@ public static class DbSeeder
         if (!await context.Usuarios.AnyAsync())
             await SeedAdminAsync(context, passwordHasher);
 
-        if (!await context.Usuarios.AnyAsync(u => u.NombreUsuario == "mesero.pruebas"))
+        if (!await context.Usuarios.AnyAsync(u => u.NombreUsuario == UsuariosSistema.MeseroPruebas))
             await SeedMeseroPruebasAsync(context, passwordHasher);
 
         if (!await context.Categorias.AnyAsync())
@@ -52,7 +52,7 @@ public static class DbSeeder
         var empleado = new Empleado { Nombres = "Mesero", Apellidos = "De Pruebas (simulado)" };
         var usuario = new Usuario
         {
-            NombreUsuario = "mesero.pruebas",
+            NombreUsuario = UsuariosSistema.MeseroPruebas,
             PasswordHash = passwordHasher.Hash(Guid.NewGuid().ToString("N")),
             Rol = RolUsuario.Mesero,
             Activo = false,

@@ -5,10 +5,12 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class MesaService(AppDbContext context) : IMesaService
+public class MesaService(IDbContextFactory<AppDbContext> contextFactory) : IMesaService
 {
     public async Task<List<MesaEstado>> ListarPorMarcaAsync(Marca marca)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var mesas = await context.Mesas
             .Where(m => m.Marca == marca && m.Activo)
             .OrderBy(m => m.Tipo)
@@ -36,6 +38,9 @@ public class MesaService(AppDbContext context) : IMesaService
         }).ToList();
     }
 
-    public async Task<Mesa?> ObtenerPorIdAsync(int id) =>
-        await context.Mesas.FirstOrDefaultAsync(m => m.Id == id);
+    public async Task<Mesa?> ObtenerPorIdAsync(int id)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Mesas.FirstOrDefaultAsync(m => m.Id == id);
+    }
 }

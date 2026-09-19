@@ -5,10 +5,16 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class CategoriaService(AppDbContext context, IAuditoriaService auditoria) : ICategoriaService
+// Cada método crea su propio DbContext de corta vida (en vez de recibir uno compartido) porque
+// en Blazor Server un servicio Scoped vive todo el circuito del usuario, y un evento de SignalR
+// puede invocar otro método de este mismo servicio mientras uno anterior sigue en curso. EF Core
+// no admite dos operaciones concurrentes sobre la misma instancia de DbContext.
+public class CategoriaService(IDbContextFactory<AppDbContext> contextFactory, IAuditoriaService auditoria) : ICategoriaService
 {
     public async Task<List<Categoria>> ListarAsync(bool incluirInactivas = false)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var query = context.Categorias.AsQueryable();
         if (!incluirInactivas)
             query = query.Where(c => c.Activo);
@@ -16,11 +22,16 @@ public class CategoriaService(AppDbContext context, IAuditoriaService auditoria)
         return await query.OrderBy(c => c.Nombre).ToListAsync();
     }
 
-    public async Task<Categoria?> ObtenerPorIdAsync(int id) =>
-        await context.Categorias.FirstOrDefaultAsync(c => c.Id == id);
+    public async Task<Categoria?> ObtenerPorIdAsync(int id)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+        return await context.Categorias.FirstOrDefaultAsync(c => c.Id == id);
+    }
 
     public async Task<Categoria> CrearAsync(string nombre, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var enUso = await context.Categorias.AnyAsync(c => c.Nombre == nombre);
         if (enUso)
             throw new InvalidOperationException($"La categoría '{nombre}' ya existe.");
@@ -35,6 +46,8 @@ public class CategoriaService(AppDbContext context, IAuditoriaService auditoria)
 
     public async Task ActualizarAsync(int id, string nombre, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var categoria = await context.Categorias.FindAsync(id)
             ?? throw new InvalidOperationException($"Categoría {id} no encontrada.");
 
@@ -52,6 +65,8 @@ public class CategoriaService(AppDbContext context, IAuditoriaService auditoria)
 
     public async Task CambiarEstadoAsync(int id, bool activo, int actorUsuarioId)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var categoria = await context.Categorias.FindAsync(id)
             ?? throw new InvalidOperationException($"Categoría {id} no encontrada.");
 

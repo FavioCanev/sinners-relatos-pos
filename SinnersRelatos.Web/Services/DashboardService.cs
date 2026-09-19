@@ -5,12 +5,17 @@ using SinnersRelatos.Web.Services.Interfaces;
 
 namespace SinnersRelatos.Web.Services;
 
-public class DashboardService(AppDbContext context) : IDashboardService
+public class DashboardService(IDbContextFactory<AppDbContext> contextFactory) : IDashboardService
 {
     public async Task<ResumenVentas> ObtenerResumenAsync(DateTime desde, DateTime hasta, Marca? marca = null)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
+        // Se excluyen los pedidos del mesero ficticio de Herramientas de Desarrollo: son datos
+        // simulados y no deben inflar las métricas que el dueño usa para tomar decisiones.
         var pedidos = await context.Pedidos
-            .Where(p => p.Estado == EstadoPedido.Cerrado && p.FechaCreacion >= desde && p.FechaCreacion <= hasta)
+            .Where(p => p.Estado == EstadoPedido.Cerrado && p.FechaCreacion >= desde && p.FechaCreacion <= hasta
+                && p.Usuario.NombreUsuario != UsuariosSistema.MeseroPruebas)
             .Include(p => p.Detalles).ThenInclude(d => d.Producto)
             .Include(p => p.Detalles).ThenInclude(d => d.Modificadores)
             .AsSplitQuery()
@@ -75,6 +80,8 @@ public class DashboardService(AppDbContext context) : IDashboardService
 
     public async Task<List<CategoriaStock>> ObtenerStockPorCategoriaAsync(Marca? marca = null)
     {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
         var productos = await context.Productos
             .Where(p => p.Activo && p.Receta.Any() && (marca == null || p.Marca == marca))
             .Include(p => p.Categoria)

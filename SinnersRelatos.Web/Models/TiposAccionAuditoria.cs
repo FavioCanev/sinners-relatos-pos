@@ -9,9 +9,6 @@ public static class TiposAccionAuditoria
     public const string ActualizarUsuario = "Actualizar usuario";
     public const string CambiarPassword = "Cambiar contraseña";
     public const string CambiarEstadoUsuario = "Cambiar estado de usuario";
-    public const string ConfigurarPreguntaSeguridad = "Configurar pregunta de seguridad";
-    public const string RestablecerPasswordPorPregunta = "Restablecer contraseña por pregunta de seguridad";
-    public const string RestablecerPasswordFallido = "Intento fallido de recuperación de contraseña";
 
     public const string CrearCategoria = "Crear categoría";
     public const string ActualizarCategoria = "Actualizar categoría";
@@ -37,6 +34,7 @@ public static class TiposAccionAuditoria
 
     public const string ConfirmarPedido = "Confirmar pedido";
     public const string ForzarVenta = "Forzar venta sin stock";
+    public const string EliminarItemPedido = "Quitar ítem de pedido";
     public const string AnularPedido = "Anular pedido";
     public const string CerrarPedido = "Cerrar cuenta / liberar mesa";
     public const string FusionarMesas = "Fusionar mesas";

@@ -12,7 +12,4 @@ public interface IUsuarioService
     Task CambiarEstadoAsync(int usuarioId, bool activo, int actorUsuarioId);
     Task<Usuario?> ValidarCredencialesAsync(string nombreUsuario, string password);
     Task<bool> CambiarPasswordPropioAsync(int usuarioId, string passwordActual, string nuevaPassword);
-    Task ConfigurarPreguntaSeguridadAsync(int usuarioId, string pregunta, string respuesta);
-    Task<string?> ObtenerPreguntaSeguridadAsync(string nombreUsuario);
-    Task<bool> RestablecerPasswordPorPreguntaAsync(string nombreUsuario, string respuesta, string nuevaPassword);
 }
