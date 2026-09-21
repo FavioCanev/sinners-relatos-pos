@@ -287,7 +287,7 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
             await hub.Clients.All.SendAsync(ComandaEventos.AlertaStockActualizada);
     }
 
-    public async Task CerrarAsync(int pedidoId, int actorUsuarioId)
+    public async Task CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId)
     {
         await using var context = await contextFactory.CreateDbContextAsync();
 
@@ -301,10 +301,11 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
 
         pedido.Estado = EstadoPedido.Cerrado;
         pedido.FechaCierre = DateTime.Now;
+        pedido.MedioPago = medioPago;
         await context.SaveChangesAsync();
 
         await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.CerrarPedido,
-            $"Cerró la cuenta y liberó el pedido #{pedidoId} ({etiqueta}).");
+            $"Cerró la cuenta y liberó el pedido #{pedidoId} ({etiqueta}), pago con {medioPago}.");
 
         await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
     }

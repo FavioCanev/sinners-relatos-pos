@@ -6,6 +6,7 @@
 @inject IMesaService MesaService
 @inject IProductoService ProductoService
 @inject IPedidoService PedidoService
+@inject IPresetService PresetService
 @inject ISesionService SesionService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -27,13 +28,27 @@ else
         <a href="/mesas/@mesa.Marca.ToString().ToLowerInvariant()" class="volver">&larr;</a>
         <div>
             <div class="mesa-titulo">@(mesa.Tipo == TipoMesa.Barra ? "Barra" : "Mesa") @mesa.Numero — @mesa.Marca</div>
-            <div class="mesero-nombre">@usuario?.NombreCompleto</div>
+            <div class="mesero-nombre">
+                @usuario?.NombreCompleto
+                @if (TiempoActivoDesde is { } activaDesde)
+                {
+                    <span class="tiempo-activo" title="Tiempo desde el primer ítem confirmado">⏱ @FormateoTiempo.TiempoTranscurrido(activaDesde)</span>
+                }
+            </div>
         </div>
         @if (confirmandoCierre)
         {
-            <div class="ms-auto d-flex gap-1">
-                <span class="text-success small align-self-center">¿Cerrar cuenta y liberar la mesa?</span>
-                <button class="btn btn-sm btn-success" @onclick="CerrarCuentaAsync">Sí, cerrar</button>
+            <div class="ms-auto d-flex gap-1 align-items-center flex-wrap">
+                <select class="form-select form-select-sm cierre-select" @onchange="OnMedioPagoChange">
+                    <option value="">Medio de pago...</option>
+                    @foreach (var medio in Enum.GetValues<MedioPago>())
+                    {
+                        <option value="@medio" selected="@(medioPagoSeleccionado == medio)">@medio</option>
+                    }
+                </select>
+                <button class="btn btn-sm btn-success" @onclick="CerrarCuentaAsync" disabled="@(medioPagoSeleccionado is null || cerrandoCuenta)">
+                    @(cerrandoCuenta ? "Cerrando..." : "Sí, cerrar")
+                </button>
                 <button class="btn btn-sm btn-outline-secondary" @onclick="() => confirmandoCierre = false">No</button>
             </div>
         }
@@ -48,11 +63,16 @@ else
         else
         {
             <div class="ms-auto d-flex gap-1">
-                <button class="btn btn-sm btn-success" @onclick="() => confirmandoCierre = true">Cerrar cuenta</button>
+                <button class="btn btn-sm btn-success" @onclick="AbrirConfirmacionCierre">Cerrar cuenta</button>
                 <button class="btn btn-sm btn-outline-danger" @onclick="() => confirmandoAnulacion = true">Anular pedido</button>
             </div>
         }
     </div>
+
+    @if (toastMensaje is not null)
+    {
+        <div class="toast-agregado">@toastMensaje</div>
+    }
 
     @if (yaConfirmados.Count > 0)
     {
@@ -109,18 +129,22 @@ else
     @if (string.IsNullOrWhiteSpace(busqueda))
     {
         <div class="marca-tabs">
-            <button class="marca-tab @(marcaSeleccionada == Marca.Sinners ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Sinners)">Sinners</button>
-            <button class="marca-tab @(marcaSeleccionada == Marca.Relatos ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Relatos)">Relatos</button>
+            <button class="marca-tab @(!mostrandoPresets && marcaSeleccionada == Marca.Sinners ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Sinners)">Sinners</button>
+            <button class="marca-tab @(!mostrandoPresets && marcaSeleccionada == Marca.Relatos ? "activa" : "")" @onclick="() => SeleccionarMarca(Marca.Relatos)">Relatos</button>
+            <button class="marca-tab @(mostrandoPresets ? "activa" : "")" @onclick="MostrarPresetsAsync">Combos</button>
         </div>
 
-        <div class="categoria-chips">
-            @foreach (var categoria in CategoriasDeMarca(marcaSeleccionada))
-            {
-                <button class="chip @(categoriaSeleccionadaId == categoria.Id ? "chip-activo" : "")" @onclick="() => categoriaSeleccionadaId = categoria.Id">
-                    @categoria.Nombre
-                </button>
-            }
-        </div>
+        @if (!mostrandoPresets)
+        {
+            <div class="categoria-chips">
+                @foreach (var categoria in CategoriasDeMarca(marcaSeleccionada))
+                {
+                    <button class="chip @(categoriaSeleccionadaId == categoria.Id ? "chip-activo" : "")" @onclick="() => categoriaSeleccionadaId = categoria.Id">
+                        @categoria.Nombre
+                    </button>
+                }
+            </div>
+        }
     }
 
     @if (mensajeError is not null)
@@ -131,24 +155,62 @@ else
         </div>
     }
 
-    <div class="productos-grid">
-        @foreach (var producto in ProductosVisibles)
-        {
-            var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
-            <button class="producto-card @(agotado ? "agotado" : "")" @onclick="() => OnProductoTapAsync(producto)">
-                <span class="producto-nombre">@producto.Nombre</span>
-                <span class="producto-precio">S/ @producto.Precio.ToString("0.00")</span>
-                @if (!string.IsNullOrWhiteSpace(busqueda))
+    @if (mostrandoPresets)
+    {
+        <div class="productos-grid">
+            @if (cargandoPresets)
+            {
+                <p class="text-muted px-2"><em>Cargando combos...</em></p>
+            }
+            else
+            {
+                @foreach (var preset in PresetsVisibles)
                 {
-                    <span class="producto-categoria">@producto.Categoria.Nombre · @producto.Marca</span>
+                    var esMixto = preset.Productos.Select(pp => pp.Producto.Marca).Distinct().Count() > 1;
+                    <div class="producto-card preset-card">
+                        <button class="preset-editar" title="Editar combo" @onclick="() => AbrirEditarPreset(preset)">✎</button>
+                        <div class="preset-agregar" @onclick="() => AgregarPresetAlCarrito(preset)">
+                            <span class="producto-nombre">@preset.Nombre</span>
+                            <span class="producto-precio">S/ @preset.PrecioTotal.ToString("0.00")</span>
+                            <span class="producto-categoria">
+                                @string.Join(", ", preset.Productos.Select(pp => esMixto
+                                    ? $"{pp.Cantidad}x {pp.Producto.Nombre} ({pp.Producto.Marca})"
+                                    : $"{pp.Cantidad}x {pp.Producto.Nombre}"))
+                            </span>
+                        </div>
+                    </div>
                 }
-                @if (agotado)
+                <button class="producto-card preset-nuevo" @onclick="AbrirNuevoPreset">
+                    <span class="producto-nombre">+ Crear combo</span>
+                </button>
+                @if (presets.Count == 0)
                 {
-                    <span class="badge-agotado">Sin stock</span>
+                    <p class="text-muted px-2"><em>Todavía no hay combos creados.</em></p>
                 }
-            </button>
-        }
-    </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="productos-grid">
+            @foreach (var producto in ProductosVisibles)
+            {
+                var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
+                <button class="producto-card @(agotado ? "agotado" : "")" @onclick="() => OnProductoTapAsync(producto)">
+                    <span class="producto-nombre">@producto.Nombre</span>
+                    <span class="producto-precio">S/ @producto.Precio.ToString("0.00")</span>
+                    @if (!string.IsNullOrWhiteSpace(busqueda))
+                    {
+                        <span class="producto-categoria">@producto.Categoria.Nombre · @producto.Marca</span>
+                    }
+                    @if (agotado)
+                    {
+                        <span class="badge-agotado">Sin stock</span>
+                    }
+                </button>
+            }
+        </div>
+    }
 
     @if (carrito.Count > 0)
     {
@@ -215,6 +277,13 @@ else
                     <button class="btn-close" @onclick="CerrarModal"></button>
                 </div>
 
+                @if (colaPreset is not null)
+                {
+                    <div class="alert alert-info py-2 small">
+                        Personalizando el combo — @(colaPreset.Count > 0 ? $"quedan {colaPreset.Count} producto(s) más." : "este es el último producto.")
+                    </div>
+                }
+
                 @if (mensajeErrorModal is not null)
                 {
                     <div class="alert alert-danger py-2">@mensajeErrorModal</div>
@@ -264,6 +333,96 @@ else
                 </div>
 
                 <button class="btn btn-primary w-100" @onclick="ConfirmarModal">Agregar al carrito</button>
+            </div>
+        </div>
+    }
+
+    @if (mostrandoEditorPreset)
+    {
+        <div class="overlay" @onclick="CerrarEditorPreset">
+            <div class="panel-modal" @onclick:stopPropagation="true">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="mb-0">@(presetEditando is null ? "Nuevo combo" : $"Editar: {presetEditando.Nombre}")</h5>
+                    <button class="btn-close" @onclick="CerrarEditorPreset"></button>
+                </div>
+
+                @if (mensajeErrorPreset is not null)
+                {
+                    <div class="alert alert-danger py-2">@mensajeErrorPreset</div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Nombre del combo</label>
+                    <input class="form-control" @bind="nombrePresetForm" @bind:event="oninput" placeholder="Ej. Combo Desayuno" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label">Agregar producto</label>
+                    <div class="d-flex gap-2 mb-2">
+                        <select class="form-select" @onchange="OnFiltroMarcaPresetChange">
+                            <option value="" selected="@(presetFiltroMarca is null)">Todas las marcas</option>
+                            <option value="@Marca.Sinners" selected="@(presetFiltroMarca == Marca.Sinners)">Sinners</option>
+                            <option value="@Marca.Relatos" selected="@(presetFiltroMarca == Marca.Relatos)">Relatos</option>
+                        </select>
+                        <select class="form-select" @onchange="OnFiltroCategoriaPresetChange">
+                            <option value="" selected="@(presetFiltroCategoriaId is null)">Todas las categorías</option>
+                            @foreach (var categoria in CategoriasParaPreset)
+                            {
+                                <option value="@categoria.Id" selected="@(presetFiltroCategoriaId == categoria.Id)">@categoria.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <select class="form-select" @onchange="OnProductoParaAgregarChange">
+                            <option value="">Selecciona un producto...</option>
+                            @foreach (var p in ProductosParaPreset)
+                            {
+                                <option value="@p.Id">@p.Nombre (S/ @p.Precio.ToString("0.00")) · @p.Marca</option>
+                            }
+                        </select>
+                        <input type="number" min="1" class="form-control cantidad-preset" @bind="cantidadParaAgregar" />
+                        <button class="btn btn-outline-secondary" @onclick="AgregarProductoAlPreset">+</button>
+                    </div>
+                </div>
+
+                @if (itemsPresetForm.Count > 0)
+                {
+                    <ul class="list-group mb-2">
+                        @foreach (var item in itemsPresetForm)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>@item.Cantidad x @item.Producto.Nombre <span class="text-muted small">(@item.Producto.Marca)</span></span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span>S/ @((item.Producto.Precio * item.Cantidad).ToString("0.00"))</span>
+                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarProductoDelPreset(item)">✕</button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                    <div class="d-flex justify-content-between mb-3">
+                        <strong>Total</strong>
+                        <strong>S/ @TotalPresetForm.ToString("0.00")</strong>
+                    </div>
+                }
+
+                <button class="btn btn-primary w-100 mb-2" @onclick="GuardarPresetAsync" disabled="@guardandoPreset">
+                    @(guardandoPreset ? "Guardando..." : "Guardar combo")
+                </button>
+
+                @if (presetEditando is not null)
+                {
+                    @if (presetDesactivando == presetEditando.Id)
+                    {
+                        <ConfirmacionInline Mensaje="¿Desactivar este combo? Dejará de aparecer para tomar pedidos."
+                                            Procesando="desactivandoPreset"
+                                            OnConfirmar="() => DesactivarPresetAsync(presetEditando.Id)"
+                                            OnCancelar="() => presetDesactivando = null" />
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-danger w-100" @onclick="() => presetDesactivando = presetEditando.Id">Desactivar combo</button>
+                    }
+                }
             </div>
         </div>
     }
@@ -389,6 +548,13 @@ else
         opacity: 0.6;
     }
 
+    /* Feedback táctil inmediato al tocar: sin esto, el único indicio de que el click hizo algo
+       era la barra del carrito apareciendo abajo, fácil de no notar. */
+    .producto-card:active, .preset-agregar:active {
+        transform: scale(0.96);
+        opacity: 0.85;
+    }
+
     .producto-nombre {
         font-weight: 600;
         font-size: 0.9rem;
@@ -423,6 +589,35 @@ else
         font-size: 0.65rem;
         padding: 0.1rem 0.4rem;
         border-radius: 0.4rem;
+    }
+
+    .toast-agregado {
+        position: fixed;
+        bottom: 76px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #222;
+        color: #fff;
+        padding: 0.5rem 1.1rem;
+        border-radius: 2rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        z-index: 30;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        animation: toast-in 0.15s ease-out;
+        pointer-events: none;
+    }
+
+    @@keyframes toast-in {
+        from {
+            opacity: 0;
+            transform: translate(-50%, 10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
     }
 
     .carrito-barra {
@@ -477,6 +672,53 @@ else
         padding: 0.5rem 0;
         border-bottom: 1px solid #eee;
     }
+
+    .tiempo-activo {
+        display: inline-block;
+        margin-left: 0.5rem;
+        font-weight: 600;
+    }
+
+    .cierre-select {
+        width: auto;
+    }
+
+    .cantidad-preset {
+        width: 70px;
+        flex: none;
+    }
+
+    .preset-card {
+        position: relative;
+    }
+
+    .preset-agregar {
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .preset-editar {
+        position: absolute;
+        top: 0.3rem;
+        right: 0.3rem;
+        border: none;
+        background: rgba(0, 0, 0, 0.06);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .preset-nuevo {
+        align-items: center;
+        justify-content: center;
+        border-style: dashed;
+        color: var(--brand-primary);
+    }
 </style>
 
 @code {
@@ -497,6 +739,8 @@ else
     private string? mensajeError;
     private bool confirmandoAnulacion;
     private bool confirmandoCierre;
+    private MedioPago? medioPagoSeleccionado;
+    private bool cerrandoCuenta;
     private bool solicitandoImpresion;
     private bool impresionSolicitada;
     private int? detalleEliminando;
@@ -505,6 +749,30 @@ else
     private List<LineaCarrito> carrito = [];
     private bool mostrandoCarrito;
     private bool confirmando;
+
+    private bool mostrandoPresets;
+    private List<Preset> presets = [];
+    private bool cargandoPresets;
+    private bool mostrandoEditorPreset;
+    private Preset? presetEditando;
+    private string nombrePresetForm = "";
+    private List<ItemPresetForm> itemsPresetForm = [];
+    private int? productoParaAgregarId;
+    private int cantidadParaAgregar = 1;
+    private Marca? presetFiltroMarca;
+    private int? presetFiltroCategoriaId;
+    private string? mensajeErrorPreset;
+    private bool guardandoPreset;
+    private int? presetDesactivando;
+    private bool desactivandoPreset;
+    private Queue<(Producto Producto, int Cantidad)>? colaPreset;
+
+    private System.Timers.Timer? temporizador;
+
+    private string? toastMensaje;
+    private System.Timers.Timer? toastTimer;
+
+    private DateTime? TiempoActivoDesde => yaConfirmados.Count > 0 ? yaConfirmados.Min(d => d.FechaCreacion) : null;
 
     private Producto? productoModal;
     private HashSet<int> opcionesSeleccionadasModal = [];
@@ -526,6 +794,21 @@ else
 
     private List<Categoria> CategoriasDeMarca(Marca marca) =>
         productos.Where(p => p.Marca == marca).Select(p => p.Categoria).DistinctBy(c => c.Id).OrderBy(c => c.Nombre).ToList();
+
+    private List<Categoria> CategoriasParaPreset =>
+        (presetFiltroMarca is { } marca ? productos.Where(p => p.Marca == marca) : productos)
+            .Select(p => p.Categoria).DistinctBy(c => c.Id).OrderBy(c => c.Nombre).ToList();
+
+    private IEnumerable<Producto> ProductosParaPreset =>
+        productos.Where(p => p.Activo
+            && (presetFiltroMarca is null || p.Marca == presetFiltroMarca)
+            && (presetFiltroCategoriaId is null || p.CategoriaId == presetFiltroCategoriaId))
+            .OrderBy(p => p.Nombre);
+
+    private IEnumerable<Preset> PresetsVisibles =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? presets
+            : presets.Where(p => p.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -554,6 +837,12 @@ else
         categoriaSeleccionadaId = CategoriasDeMarca(marcaSeleccionada).FirstOrDefault()?.Id;
 
         cargando = false;
+
+        // Refresca el contador de tiempo activo cada 30s. No hace falta recargar nada del
+        // servidor: TiempoActivoDesde ya está en memoria, solo se vuelve a pintar.
+        temporizador = new System.Timers.Timer(30_000);
+        temporizador.Elapsed += async (_, _) => await InvokeAsync(StateHasChanged);
+        temporizador.Start();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -585,6 +874,176 @@ else
     {
         marcaSeleccionada = marca;
         categoriaSeleccionadaId = CategoriasDeMarca(marca).FirstOrDefault()?.Id;
+        mostrandoPresets = false;
+    }
+
+    private async Task MostrarPresetsAsync()
+    {
+        mostrandoPresets = true;
+        cargandoPresets = true;
+        presets = await PresetService.ListarAsync();
+        cargandoPresets = false;
+    }
+
+    private async Task AgregarPresetAlCarrito(Preset preset)
+    {
+        // Los productos del combo que tienen modificadores (obligatorios u opcionales) o que
+        // están sin stock pasan por el mismo modal que si se agregaran uno por uno; el resto se
+        // agrega directo, igual que antes.
+        var pendientes = new Queue<(Producto Producto, int Cantidad)>();
+        var huboAgregadoDirecto = false;
+
+        foreach (var item in preset.Productos)
+        {
+            // PresetService no carga GruposModificadores del producto (no lo necesita para
+            // mostrar el combo), así que se usa la instancia ya cargada en esta página — la
+            // misma que usa el grid de productos — para saber si corresponde abrir el modal.
+            var producto = productos.FirstOrDefault(p => p.Id == item.ProductoId) ?? item.Producto;
+            var tieneModificadores = producto.GruposModificadores.Count > 0;
+            var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
+
+            if (tieneModificadores || agotado)
+            {
+                pendientes.Enqueue((producto, item.Cantidad));
+            }
+            else
+            {
+                AgregarAlCarrito(producto, [], false, item.Cantidad, mostrarToast: false);
+                huboAgregadoDirecto = true;
+            }
+        }
+
+        if (pendientes.Count == 0)
+        {
+            if (huboAgregadoDirecto)
+                MostrarToast($"✓ {preset.Nombre}");
+            return;
+        }
+
+        colaPreset = pendientes;
+        await AbrirSiguienteDelPresetAsync();
+    }
+
+    private async Task AbrirSiguienteDelPresetAsync()
+    {
+        if (colaPreset is null || colaPreset.Count == 0)
+        {
+            colaPreset = null;
+            return;
+        }
+
+        var (producto, cantidad) = colaPreset.Dequeue();
+        await AbrirModalProductoAsync(producto, cantidad);
+    }
+
+    private void AbrirNuevoPreset()
+    {
+        presetEditando = null;
+        nombrePresetForm = "";
+        itemsPresetForm = [];
+        productoParaAgregarId = null;
+        cantidadParaAgregar = 1;
+        presetFiltroMarca = null;
+        presetFiltroCategoriaId = null;
+        mensajeErrorPreset = null;
+        mostrandoEditorPreset = true;
+    }
+
+    private void AbrirEditarPreset(Preset preset)
+    {
+        presetEditando = preset;
+        nombrePresetForm = preset.Nombre;
+        itemsPresetForm = preset.Productos.Select(pp => new ItemPresetForm { Producto = pp.Producto, Cantidad = pp.Cantidad }).ToList();
+        productoParaAgregarId = null;
+        cantidadParaAgregar = 1;
+        presetFiltroMarca = null;
+        presetFiltroCategoriaId = null;
+        mensajeErrorPreset = null;
+        presetDesactivando = null;
+        mostrandoEditorPreset = true;
+    }
+
+    private void CerrarEditorPreset() => mostrandoEditorPreset = false;
+
+    private void OnFiltroMarcaPresetChange(ChangeEventArgs e)
+    {
+        presetFiltroMarca = Enum.TryParse<Marca>(e.Value?.ToString(), out var marca) ? marca : null;
+        presetFiltroCategoriaId = null;
+    }
+
+    private void OnFiltroCategoriaPresetChange(ChangeEventArgs e) =>
+        presetFiltroCategoriaId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void OnProductoParaAgregarChange(ChangeEventArgs e) =>
+        productoParaAgregarId = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+
+    private void AgregarProductoAlPreset()
+    {
+        if (productoParaAgregarId is not { } id)
+            return;
+
+        var producto = productos.FirstOrDefault(p => p.Id == id);
+        if (producto is null)
+            return;
+
+        var existente = itemsPresetForm.FirstOrDefault(i => i.Producto.Id == id);
+        if (existente is not null)
+            existente.Cantidad += cantidadParaAgregar;
+        else
+            itemsPresetForm.Add(new ItemPresetForm { Producto = producto, Cantidad = cantidadParaAgregar });
+
+        productoParaAgregarId = null;
+        cantidadParaAgregar = 1;
+    }
+
+    private void QuitarProductoDelPreset(ItemPresetForm item) => itemsPresetForm.Remove(item);
+
+    private decimal TotalPresetForm => itemsPresetForm.Sum(i => i.Producto.Precio * i.Cantidad);
+
+    private async Task GuardarPresetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(nombrePresetForm))
+        {
+            mensajeErrorPreset = "Ingresa un nombre para el combo.";
+            return;
+        }
+        if (itemsPresetForm.Count == 0)
+        {
+            mensajeErrorPreset = "Agrega al menos un producto.";
+            return;
+        }
+
+        guardandoPreset = true;
+        mensajeErrorPreset = null;
+        try
+        {
+            var cantidades = itemsPresetForm.ToDictionary(i => i.Producto.Id, i => i.Cantidad);
+            if (presetEditando is null)
+                await PresetService.CrearAsync(nombrePresetForm.Trim(), cantidades, usuario!.Id);
+            else
+                await PresetService.ActualizarAsync(presetEditando.Id, nombrePresetForm.Trim(), cantidades, usuario!.Id);
+
+            mostrandoEditorPreset = false;
+            presets = await PresetService.ListarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeErrorPreset = ex.Message;
+        }
+        finally
+        {
+            guardandoPreset = false;
+        }
+    }
+
+    private async Task DesactivarPresetAsync(int presetId)
+    {
+        desactivandoPreset = true;
+        await PresetService.CambiarEstadoAsync(presetId, false, usuario!.Id);
+        presets = await PresetService.ListarAsync();
+        presetDesactivando = null;
+        desactivandoPreset = false;
+        mostrandoEditorPreset = false;
     }
 
     private async Task OnProductoTapAsync(Producto producto)
@@ -593,25 +1052,33 @@ else
         var agotado = disponibilidad.TryGetValue(producto.Id, out var disp) && !disp;
 
         if (tieneModificadores || agotado)
-        {
-            productoModal = producto;
-            opcionesSeleccionadasModal = [];
-            forzarVentaModal = false;
-            cantidadModal = 1;
-            mensajeErrorModal = null;
-
-            var opcionIds = producto.GruposModificadores
-                .SelectMany(g => g.GrupoModificador.Opciones.Select(o => o.Id))
-                .Distinct();
-            disponibilidadOpciones = await PedidoService.VerificarDisponibilidadOpcionesAsync(producto.Id, opcionIds);
-        }
+            await AbrirModalProductoAsync(producto, 1);
         else
-        {
             AgregarAlCarrito(producto, [], false, 1);
-        }
     }
 
-    private void CerrarModal() => productoModal = null;
+    private async Task AbrirModalProductoAsync(Producto producto, int cantidad)
+    {
+        productoModal = producto;
+        opcionesSeleccionadasModal = [];
+        forzarVentaModal = false;
+        cantidadModal = cantidad;
+        mensajeErrorModal = null;
+
+        var opcionIds = producto.GruposModificadores
+            .SelectMany(g => g.GrupoModificador.Opciones.Select(o => o.Id))
+            .Distinct();
+        disponibilidadOpciones = await PedidoService.VerificarDisponibilidadOpcionesAsync(producto.Id, opcionIds);
+    }
+
+    private void CerrarModal()
+    {
+        // Si se estaba resolviendo los modificadores de un combo y el usuario cierra el modal a
+        // mano (X, tocar fuera), se cancela el resto de la cola: lo que ya se agregó queda en el
+        // carrito, pero no se sigue preguntando por los productos del combo que faltaban.
+        productoModal = null;
+        colaPreset = null;
+    }
 
     private void ToggleOpcionModal(GrupoModificador grupo, OpcionModificador opcion)
     {
@@ -628,7 +1095,7 @@ else
             opcionesSeleccionadasModal.Remove(opcion.Id);
     }
 
-    private void ConfirmarModal()
+    private async Task ConfirmarModal()
     {
         if (productoModal is null)
             return;
@@ -655,10 +1122,15 @@ else
             .ToList();
 
         AgregarAlCarrito(productoModal, opciones, agotadoModal && forzarVentaModal, cantidadModal);
-        CerrarModal();
+        productoModal = null;
+
+        // Si venimos de un combo, seguimos con el siguiente producto que necesite modificadores
+        // en vez de cerrar del todo.
+        if (colaPreset is not null)
+            await AbrirSiguienteDelPresetAsync();
     }
 
-    private void AgregarAlCarrito(Producto producto, List<OpcionModificador> opciones, bool forzar, int cantidad)
+    private void AgregarAlCarrito(Producto producto, List<OpcionModificador> opciones, bool forzar, int cantidad, bool mostrarToast = true)
     {
         var opcionIds = opciones.Select(o => o.Id).OrderBy(x => x).ToList();
         var existente = carrito.FirstOrDefault(l => l.Producto.Id == producto.Id
@@ -669,6 +1141,26 @@ else
             existente.Cantidad += cantidad;
         else
             carrito.Add(new LineaCarrito { Producto = producto, OpcionesSeleccionadas = opciones, ForzarVenta = forzar, Cantidad = cantidad });
+
+        if (mostrarToast)
+            MostrarToast($"✓ {producto.Nombre}");
+    }
+
+    // Aviso breve al agregar algo al carrito: antes el único indicio era la barra del carrito
+    // apareciendo/actualizándose abajo, poco perceptible si no se mira hacia allá justo al tocar.
+    private void MostrarToast(string mensaje)
+    {
+        toastMensaje = mensaje;
+
+        toastTimer?.Stop();
+        toastTimer?.Dispose();
+        toastTimer = new System.Timers.Timer(1200) { AutoReset = false };
+        toastTimer.Elapsed += async (_, _) =>
+        {
+            toastMensaje = null;
+            await InvokeAsync(StateHasChanged);
+        };
+        toastTimer.Start();
     }
 
     private void CambiarCantidad(LineaCarrito linea, int delta)
@@ -742,12 +1234,22 @@ else
         Navigation.NavigateTo($"/mesas/{mesa!.Marca.ToString().ToLowerInvariant()}");
     }
 
+    private void AbrirConfirmacionCierre()
+    {
+        confirmandoCierre = true;
+        medioPagoSeleccionado = null;
+    }
+
+    private void OnMedioPagoChange(ChangeEventArgs e) =>
+        medioPagoSeleccionado = Enum.TryParse<MedioPago>(e.Value?.ToString(), out var medio) ? medio : null;
+
     private async Task CerrarCuentaAsync()
     {
-        if (pedido is null)
+        if (pedido is null || medioPagoSeleccionado is not { } medio)
             return;
 
-        await PedidoService.CerrarAsync(pedido.Id, usuario!.Id);
+        cerrandoCuenta = true;
+        await PedidoService.CerrarAsync(pedido.Id, medio, usuario!.Id);
         Navigation.NavigateTo($"/mesas/{mesa!.Marca.ToString().ToLowerInvariant()}");
     }
 
@@ -765,6 +1267,8 @@ else
     public async ValueTask DisposeAsync()
     {
         referenciaHub?.Dispose();
+        temporizador?.Dispose();
+        toastTimer?.Dispose();
 
         if (tokenSuscripcion is { } token)
         {
@@ -787,5 +1291,11 @@ else
         public List<OpcionModificador> OpcionesSeleccionadas { get; set; } = [];
         public bool ForzarVenta { get; set; }
         public decimal Subtotal => Cantidad * (Producto.Precio + OpcionesSeleccionadas.Sum(o => o.PrecioAdicional));
+    }
+
+    private class ItemPresetForm
+    {
+        public required Producto Producto { get; init; }
+        public int Cantidad { get; set; } = 1;
     }
 }

@@ -82,3 +82,46 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Modal flotante compartido por las pantallas de catálogo (Categorías, Productos, Ingredientes,
+   Modificadores, Usuarios): antes "Editar"/"Nuevo" mostraba un formulario arriba de la página,
+   obligando a hacer scroll hasta el principio sin importar dónde estaba el ítem en la lista.
+   Ahora aparece como ventana flotante justo al tocar el botón, sin perder la posición del scroll. */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-y: auto;
+    z-index: 1050;
+}
+
+.panel-modal {
+    background: #fff;
+    width: 100%;
+    max-width: 640px;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    margin: auto;
+}
+
+.panel-modal-ancho {
+    max-width: 900px;
+}
+
+@media (max-width: 700px) {
+    .overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .panel-modal {
+        border-radius: 1rem 1rem 0 0;
+        max-height: 90vh;
+    }
+}

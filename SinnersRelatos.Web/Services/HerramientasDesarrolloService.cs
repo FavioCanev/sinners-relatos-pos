@@ -218,7 +218,10 @@ public class HerramientasDesarrolloService(
             // El 60% de las mesas simuladas se cierran de inmediato para variar
             // entre mesas "ocupadas" y pedidos ya facturados al probar.
             if (random.Next(100) < 60)
-                await pedidoService.CerrarAsync(pedido.Id, meseroId);
+            {
+                var medioPago = (MedioPago)random.Next(Enum.GetValues<MedioPago>().Length);
+                await pedidoService.CerrarAsync(pedido.Id, medioPago, meseroId);
+            }
 
             pedidosCreados++;
         }

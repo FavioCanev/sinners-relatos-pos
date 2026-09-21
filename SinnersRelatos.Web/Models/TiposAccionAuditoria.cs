@@ -39,6 +39,10 @@ public static class TiposAccionAuditoria
     public const string CerrarPedido = "Cerrar cuenta / liberar mesa";
     public const string FusionarMesas = "Fusionar mesas";
 
+    public const string CrearPreset = "Crear combo";
+    public const string ActualizarPreset = "Actualizar combo";
+    public const string CambiarEstadoPreset = "Cambiar estado de combo";
+
     public const string CambiarModoPruebas = "Cambiar modo de pruebas";
     public const string VaciarStockPruebas = "Vaciar stock (modo pruebas)";
     public const string CargarStockPruebas = "Cargar stock de prueba (modo pruebas)";
