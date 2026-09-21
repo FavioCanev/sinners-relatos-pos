@@ -19,7 +19,13 @@ public class MesaService(IDbContextFactory<AppDbContext> contextFactory) : IMesa
 
         var pedidosActivosPorMesa = await context.PedidosMesas
             .Where(pm => pm.Mesa.Marca == marca && pm.Pedido.Estado == EstadoPedido.Pendiente)
-            .Select(pm => new { pm.MesaId, pm.PedidoId, TieneItems = pm.Pedido.Detalles.Any() })
+            .Select(pm => new
+            {
+                pm.MesaId,
+                pm.PedidoId,
+                TieneItems = pm.Pedido.Detalles.Any(),
+                OcupadaDesde = pm.Pedido.Detalles.Any() ? pm.Pedido.Detalles.Min(d => d.FechaCreacion) : (DateTime?)null
+            })
             .ToListAsync();
 
         var mapaPedidos = pedidosActivosPorMesa
@@ -33,7 +39,8 @@ public class MesaService(IDbContextFactory<AppDbContext> contextFactory) : IMesa
             {
                 Mesa = m,
                 Ocupada = info?.TieneItems ?? false,
-                PedidoId = info?.PedidoId
+                PedidoId = info?.PedidoId,
+                OcupadaDesde = info?.OcupadaDesde
             };
         }).ToList();
     }

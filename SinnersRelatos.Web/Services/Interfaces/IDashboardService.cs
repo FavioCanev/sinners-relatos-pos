@@ -12,6 +12,7 @@ public class ResumenVentas
     public List<VentaPorDia> VentasPorDia { get; set; } = [];
     public List<ProductoMasPedido> TopProductos { get; set; } = [];
     public List<VentaPorMarca> VentasPorMarca { get; set; } = [];
+    public List<VentaPorMedioPago> VentasPorMedioPago { get; set; } = [];
 }
 
 public class VentaPorDia
@@ -30,6 +31,12 @@ public class ProductoMasPedido
 public class VentaPorMarca
 {
     public Marca Marca { get; set; }
+    public decimal Total { get; set; }
+}
+
+public class VentaPorMedioPago
+{
+    public MedioPago MedioPago { get; set; }
     public decimal Total { get; set; }
 }
 

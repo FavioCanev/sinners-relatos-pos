@@ -22,6 +22,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RecetaOpcionModificador> RecetasOpcionModificador => Set<RecetaOpcionModificador>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
     public DbSet<ConfiguracionSistema> ConfiguracionSistema => Set<ConfiguracionSistema>();
+    public DbSet<Preset> Presets => Set<Preset>();
+    public DbSet<PresetProducto> PresetProductos => Set<PresetProducto>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -201,6 +203,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(l => l.Usuario)
                 .WithMany()
                 .HasForeignKey(l => l.UsuarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Preset>(entity =>
+        {
+            entity.HasIndex(p => p.Nombre).IsUnique();
+        });
+
+        modelBuilder.Entity<PresetProducto>(entity =>
+        {
+            entity.HasKey(pp => new { pp.PresetId, pp.ProductoId });
+
+            entity.HasOne(pp => pp.Preset)
+                .WithMany(p => p.Productos)
+                .HasForeignKey(pp => pp.PresetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(pp => pp.Producto)
+                .WithMany()
+                .HasForeignKey(pp => pp.ProductoId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

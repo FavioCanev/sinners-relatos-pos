@@ -3,6 +3,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
+@implements IDisposable
 @inject IMesaService MesaService
 @inject IPedidoService PedidoService
 
@@ -71,13 +72,27 @@ else
                 var claseEstado = mesaEstado.Ocupada ? "mesa-ocupada" : "mesa-libre";
                 var ordenSeleccion = mesasSeleccionadas.IndexOf(mesaEstado.Mesa.Id);
                 var seleccionada = ordenSeleccion >= 0;
+                var mostrarTiempo = mesaEstado.Ocupada && mesaEstado.OcupadaDesde is not null;
+                var yEtiqueta = mostrarTiempo ? y + h / 2 - 9 : y + h / 2;
 
-                <g class="mesa-grupo @claseEstado @(seleccionada ? "mesa-seleccionada" : "")" @onclick="() => OnMesaClick(mesaEstado)">
+                <g class="mesa-grupo @claseEstado @(seleccionada ? "mesa-seleccionada" : "") @(mesaEstado.Mesa.Tipo == TipoMesa.Barra ? "mesa-tipo-barra" : "mesa-tipo-mesa")" @onclick="() => OnMesaClick(mesaEstado)">
                     <rect x="@x" y="@y" width="@w" height="@h" rx="6" class="mesa-rect" />
-                    <text x="@(x + w / 2)" y="@(y + h / 2)" class="mesa-texto" text-anchor="middle" dominant-baseline="middle">@etiqueta</text>
+                    @* El nombre y el tiempo van juntos en un solo <g> para poder girarlos como bloque
+                       en celulares en vertical (ver media query más abajo): así, aunque el mapa entero
+                       esté rotado 90°/270° para aprovechar el alto de la pantalla, las palabras se leen
+                       normalmente sin tener que girar el teléfono. *@
+                    <g class="mesa-etiqueta">
+                        <text x="@(x + w / 2)" y="@yEtiqueta" class="mesa-texto" text-anchor="middle" dominant-baseline="middle">@etiqueta</text>
+                        @if (mostrarTiempo)
+                        {
+                            <g>
+                                <text x="@(x + w / 2)" y="@(y + h / 2 + 13)" class="mesa-tiempo" text-anchor="middle" dominant-baseline="middle">⏱ @FormateoTiempo.TiempoTranscurrido(mesaEstado.OcupadaDesde!.Value)</text>
+                            </g>
+                        }
+                    </g>
                     @if (seleccionada)
                     {
-                        <g>
+                        <g class="mesa-etiqueta">
                             <circle cx="@(x + w - 10)" cy="@(y + 10)" r="12" class="mesa-badge" />
                             <text x="@(x + w - 10)" y="@(y + 10)" class="mesa-badge-texto" text-anchor="middle" dominant-baseline="middle">@(ordenSeleccion + 1)</text>
                         </g>
@@ -174,6 +189,14 @@ else
         pointer-events: none;
     }
 
+    .mesa-tiempo {
+        font-size: 12px;
+        font-weight: 600;
+        pointer-events: none;
+        fill: #fff;
+        opacity: 0.9;
+    }
+
     .mesa-grupo:active .mesa-rect {
         opacity: 0.8;
     }
@@ -222,6 +245,42 @@ else
            quede en el sentido correcto según la disposición física del local. */
         .mapa-svg-sinners {
             transform: rotate(270deg);
+        }
+
+        /* Girar el mapa entero también gira las palabras: sin esto, el nombre y el tiempo
+           quedan de costado y hay que girar el teléfono para leerlos. Cada etiqueta se gira
+           en sentido contrario al mapa (como bloque, con "transform-box: fill-box" para que
+           el pivote sea su propio centro y no el del SVG), dejando el texto derecho de nuevo. */
+        .mesa-etiqueta {
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+
+        .mapa-svg .mesa-etiqueta {
+            transform: rotate(-90deg);
+        }
+
+        .mapa-svg-sinners .mesa-etiqueta {
+            transform: rotate(90deg);
+        }
+
+        /* Al girar cada etiqueta, lo que antes era su ancho (el texto horizontal) pasa a
+           ocupar el alto del cuadro de la mesa. Las Barras son bajitas (alto chico), así que
+           el nombre no entra al tamaño normal: se achica la letra para que quepa sin salirse. */
+        .mesa-tipo-barra .mesa-texto {
+            font-size: 13px;
+        }
+
+        .mesa-tipo-barra .mesa-tiempo {
+            font-size: 9px;
+        }
+
+        .mesa-tipo-mesa .mesa-texto {
+            font-size: 19px;
+        }
+
+        .mesa-tipo-mesa .mesa-tiempo {
+            font-size: 11px;
         }
     }
 </style>
@@ -272,6 +331,8 @@ else
         [(TipoMesa.Mesa, 4)] = (771, 340.5, 108, 114),
     };
 
+    private System.Timers.Timer? temporizador;
+
     protected override async Task OnParametersSetAsync()
     {
         marcaInvalida = !Enum.TryParse(MarcaTexto, ignoreCase: true, out marca);
@@ -284,7 +345,27 @@ else
         cargando = true;
         mesas = await MesaService.ListarPorMarcaAsync(marca);
         cargando = false;
+
+        // Se crea una sola vez (persiste entre cambios de marca dentro del mismo componente) y
+        // refresca tanto la ocupación de las mesas como el contador de tiempo de cada una.
+        if (temporizador is null)
+        {
+            temporizador = new System.Timers.Timer(30_000);
+            temporizador.Elapsed += async (_, _) => await RefrescarAsync();
+            temporizador.Start();
+        }
     }
+
+    private async Task RefrescarAsync()
+    {
+        if (marcaInvalida)
+            return;
+
+        mesas = await MesaService.ListarPorMarcaAsync(marca);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => temporizador?.Dispose();
 
     private (double X, double Y, double W, double H)? ObtenerRect(Mesa mesa)
     {

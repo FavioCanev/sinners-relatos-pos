@@ -66,6 +66,16 @@ public class DashboardService(IDbContextFactory<AppDbContext> contextFactory) : 
             .OrderBy(v => v.Marca)
             .ToList();
 
+        // Pedidos cerrados antes de que existiera esta funcionalidad (o cerrados desde
+        // Herramientas de Desarrollo antes de que se agregara el medio) quedan con MedioPago
+        // nulo y no entran en este desglose, aunque sí cuentan en el total de ventas.
+        var ventasPorMedioPago = detallesFiltrados
+            .Where(x => x.Pedido.MedioPago is not null)
+            .GroupBy(x => x.Pedido.MedioPago!.Value)
+            .Select(g => new VentaPorMedioPago { MedioPago = g.Key, Total = g.Sum(x => TotalDetalle(x.Detalle)) })
+            .OrderByDescending(v => v.Total)
+            .ToList();
+
         return new ResumenVentas
         {
             TotalVentas = totalVentas,
@@ -74,7 +84,8 @@ public class DashboardService(IDbContextFactory<AppDbContext> contextFactory) : 
             IngredientesBajoStock = ingredientesBajoStock,
             VentasPorDia = ventasPorDia,
             TopProductos = topProductos,
-            VentasPorMarca = ventasPorMarca
+            VentasPorMarca = ventasPorMarca,
+            VentasPorMedioPago = ventasPorMedioPago
         };
     }
 

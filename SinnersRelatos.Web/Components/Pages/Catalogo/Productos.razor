@@ -57,9 +57,12 @@
 
 @if (mostrandoFormulario)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">@(formulario.Id is null ? "Nuevo Producto" : "Editar Producto")</h5>
+    <div class="overlay" @onclick="() => mostrandoFormulario = false">
+        <div class="panel-modal panel-modal-ancho" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">@(formulario.Id is null ? "Nuevo Producto" : "Editar Producto")</h5>
+                <button class="btn-close" @onclick="() => mostrandoFormulario = false"></button>
+            </div>
             <EditForm Model="formulario" OnValidSubmit="GuardarAsync">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger" />

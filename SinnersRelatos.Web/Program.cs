@@ -35,6 +35,7 @@ builder.Services.AddScoped<ISesionService, SesionService>();
 builder.Services.AddScoped<IAuditoriaService, AuditoriaService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IHerramientasDesarrolloService, HerramientasDesarrolloService>();
+builder.Services.AddScoped<IPresetService, PresetService>();
 
 var app = builder.Build();
 

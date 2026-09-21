@@ -28,29 +28,32 @@
 
 @if (mostrandoFormulario)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">@(formulario.Id is null ? "Nuevo Ingrediente" : "Editar Ingrediente")</h5>
+    <div class="overlay" @onclick="() => mostrandoFormulario = false">
+        <div class="panel-modal" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">@(formulario.Id is null ? "Nuevo Ingrediente" : "Editar Ingrediente")</h5>
+                <button class="btn-close" @onclick="() => mostrandoFormulario = false"></button>
+            </div>
             <EditForm Model="formulario" OnValidSubmit="GuardarAsync">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger" />
                 <div class="row g-3">
-                    <div class="col-md-5">
+                    <div class="col-md-7">
                         <label class="form-label">Nombre</label>
-                        <InputText class="form-control" @bind-Value="formulario.Nombre" />
+                        <InputText class="form-control" @bind-Value="formulario.Nombre" autofocus />
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-5">
                         <label class="form-label">Unidad de medida</label>
                         <InputText class="form-control" @bind-Value="formulario.UnidadMedida" placeholder="ml, g, kg, unidad..." />
                     </div>
                     @if (formulario.Id is null)
                     {
-                        <div class="col-md-2">
+                        <div class="col-md-6">
                             <label class="form-label">Stock inicial</label>
                             <InputNumber class="form-control" @bind-Value="formulario.StockInicial" step="0.001" />
                         </div>
                     }
-                    <div class="col-md-2">
+                    <div class="col-md-6">
                         <label class="form-label">Alertar bajo</label>
                         <InputNumber class="form-control" @bind-Value="formulario.StockMinimo" step="0.001" />
                     </div>
@@ -67,19 +70,22 @@
 
 @if (ingredienteAjustandoStock is not null)
 {
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">Ajustar stock — @ingredienteAjustandoStock.Nombre</h5>
+    <div class="overlay" @onclick="() => ingredienteAjustandoStock = null">
+        <div class="panel-modal" @onclick:stopPropagation="true">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Ajustar stock — @ingredienteAjustandoStock.Nombre</h5>
+                <button class="btn-close" @onclick="() => ingredienteAjustandoStock = null"></button>
+            </div>
             <p class="text-muted mb-2">Stock actual: @ingredienteAjustandoStock.StockActual.ToString("0.###") @ingredienteAjustandoStock.UnidadMedida</p>
             <div class="row g-2 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-12">
                     <label class="form-label">Cantidad a sumar (usa negativo para restar)</label>
-                    <input type="number" step="0.001" class="form-control" @bind="cantidadAjuste" />
+                    <input type="number" step="0.001" class="form-control" @bind="cantidadAjuste" autofocus />
                 </div>
-                <div class="col-md-6">
-                    <button class="btn btn-primary" @onclick="AplicarAjusteAsync">Aplicar</button>
-                    <button class="btn btn-outline-secondary" @onclick="() => ingredienteAjustandoStock = null">Cancelar</button>
-                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-primary" @onclick="AplicarAjusteAsync">Aplicar</button>
+                <button class="btn btn-outline-secondary" @onclick="() => ingredienteAjustandoStock = null">Cancelar</button>
             </div>
         </div>
     </div>
