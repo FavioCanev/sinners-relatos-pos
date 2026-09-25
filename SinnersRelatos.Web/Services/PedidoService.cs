@@ -372,14 +372,16 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
     {
         await using var context = await contextFactory.CreateDbContextAsync();
 
+        // Se listan los tres estados (no solo los pendientes de preparar): el KDS los separa en
+        // columnas Recibido / En preparación / Listo, y los "Listo" quedan visibles ahí hasta que
+        // se cierra la cuenta de la mesa (momento en que el filtro por Pedido.Estado los saca).
         var detalles = await context.DetallesPedido
             .Include(d => d.Producto)
             .Include(d => d.Pedido).ThenInclude(p => p.Mesas).ThenInclude(pm => pm.Mesa)
             .Include(d => d.Modificadores).ThenInclude(m => m.OpcionModificador)
-            .Where(d => d.Estado == EstadoDetallePedido.Pendiente
-                && d.Producto.DestinoPreparacion == destino
+            .Where(d => d.Producto.DestinoPreparacion == destino
                 && d.Pedido.Estado == EstadoPedido.Pendiente)
-            .OrderBy(d => d.FechaCreacion)
+            .OrderByDescending(d => d.FechaCambioEstado ?? d.FechaCreacion)
             .ToListAsync();
 
         return detalles.Select(d => new ItemKds
@@ -391,8 +393,24 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
             ProductoNombre = d.Producto.Nombre,
             Cantidad = d.Cantidad,
             Modificadores = d.Modificadores.Select(m => m.OpcionModificador.Nombre).ToList(),
-            FechaCreacion = d.FechaCreacion
+            FechaCreacion = d.FechaCreacion,
+            Estado = d.Estado,
+            FechaCambioEstado = d.FechaCambioEstado
         }).ToList();
+    }
+
+    public async Task MarcarEnPreparacionAsync(int detallePedidoId)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
+        var detalle = await context.DetallesPedido.FindAsync(detallePedidoId)
+            ?? throw new InvalidOperationException($"Ítem {detallePedidoId} no encontrado.");
+
+        detalle.Estado = EstadoDetallePedido.EnPreparacion;
+        detalle.FechaCambioEstado = DateTime.Now;
+        await context.SaveChangesAsync();
+
+        await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
     }
 
     public async Task MarcarListoAsync(int detallePedidoId)
@@ -403,6 +421,7 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
             ?? throw new InvalidOperationException($"Ítem {detallePedidoId} no encontrado.");
 
         detalle.Estado = EstadoDetallePedido.Listo;
+        detalle.FechaCambioEstado = DateTime.Now;
         await context.SaveChangesAsync();
 
         await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);

@@ -19,6 +19,8 @@ public class ItemKds
     public required int Cantidad { get; init; }
     public required List<string> Modificadores { get; init; }
     public required DateTime FechaCreacion { get; init; }
+    public required EstadoDetallePedido Estado { get; init; }
+    public DateTime? FechaCambioEstado { get; init; }
 }
 
 public class SolicitudImpresion
@@ -39,6 +41,7 @@ public interface IPedidoService
     Task CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId);
     Task<Pedido> FusionarAsync(IEnumerable<int> mesaIds, int usuarioId);
     Task<List<ItemKds>> ListarParaKdsAsync(DestinoPreparacion destino);
+    Task MarcarEnPreparacionAsync(int detallePedidoId);
     Task MarcarListoAsync(int detallePedidoId);
     Task SolicitarImpresionAsync(int pedidoId);
 }
