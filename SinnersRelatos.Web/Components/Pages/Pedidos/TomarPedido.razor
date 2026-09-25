@@ -89,6 +89,10 @@ else
                                 {
                                     <span class="badge-listo">✅ Listo para recoger</span>
                                 }
+                                else if (d.Estado == EstadoDetallePedido.EnPreparacion)
+                                {
+                                    <span class="badge-preparacion">👨‍🍳 En preparación</span>
+                                }
                             </span>
                             @if (detalleEliminando != d.Id)
                             {
@@ -470,6 +474,18 @@ else
         background: #e8f5e9;
         color: #1b5e20;
         border: 1px solid #2e7d32;
+        border-radius: 1rem;
+        padding: 0.05rem 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-preparacion {
+        display: inline-block;
+        margin-left: 0.5rem;
+        background: #fdf1e0;
+        color: #8a5a17;
+        border: 1px solid #b8863b;
         border-radius: 1rem;
         padding: 0.05rem 0.6rem;
         font-size: 0.75rem;
