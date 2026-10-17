@@ -1,6 +1,14 @@
 window.dashboardCharts = (function () {
     const instancias = {};
 
+    // Valores por defecto para el tema oscuro de la app.
+    if (window.Chart) {
+        Chart.defaults.color = "#a79fa4";
+        Chart.defaults.borderColor = "rgba(255, 255, 255, 0.07)";
+        Chart.defaults.font.family = "'Barlow', 'Segoe UI', system-ui, sans-serif";
+        Chart.defaults.elements.bar.borderRadius = 6;
+    }
+
     function renderLinea(canvasId, etiquetas, datos, color) {
         destruir(canvasId);
         const ctx = document.getElementById(canvasId);

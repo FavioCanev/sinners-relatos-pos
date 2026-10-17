@@ -57,7 +57,7 @@ else
 {
     <div class="mapa-scroll">
         <svg viewBox="0 0 1000 550" class="mapa-svg @(marca == Marca.Sinners ? "mapa-svg-sinners" : "")" xmlns="http://www.w3.org/2000/svg">
-            <rect x="10" y="10" width="980" height="530" fill="none" stroke="#333" stroke-width="4" />
+            <rect x="10" y="10" width="980" height="530" class="mapa-borde" />
 
             @foreach (var mesaEstado in mesas)
             {
@@ -117,7 +117,7 @@ else
     }
 
     .volver {
-        color: var(--brand-primary);
+        color: var(--brand-accent);
         text-decoration: none;
         font-weight: 600;
         white-space: nowrap;
@@ -137,19 +137,26 @@ else
     }
 
     .chip-libre {
-        background: #f9eef0;
-        color: var(--brand-primary);
-        border: 1px solid #c9a3a9;
+        background: var(--surface-2);
+        color: var(--text);
+        border: 1px solid var(--line);
     }
 
     .chip-ocupada {
         background: var(--brand-primary);
         color: #fff;
+        border: 1px solid var(--brand-primary-border);
     }
 
     .mapa-scroll {
         overflow-x: auto;
         padding: 0.5rem;
+    }
+
+    .mapa-borde {
+        fill: var(--surface-1);
+        stroke: var(--line);
+        stroke-width: 4;
     }
 
     .mapa-svg {
@@ -164,18 +171,18 @@ else
     }
 
     .mesa-libre .mesa-rect {
-        fill: #f9eef0;
-        stroke: #c9a3a9;
+        fill: var(--surface-2);
+        stroke: var(--line);
         stroke-width: 3;
     }
 
     .mesa-libre .mesa-texto {
-        fill: var(--brand-primary);
+        fill: var(--text);
     }
 
     .mesa-ocupada .mesa-rect {
         fill: var(--brand-primary);
-        stroke: var(--brand-primary-dark);
+        stroke: var(--brand-primary-border);
         stroke-width: 3;
     }
 
@@ -197,18 +204,28 @@ else
         opacity: 0.9;
     }
 
+    /* Los asientos de barra son mucho más chicos que las mesas: su texto va más pequeño para
+       no salirse de la casilla. */
+    .mesa-tipo-barra .mesa-texto {
+        font-size: 15px;
+    }
+
+    .mesa-tipo-barra .mesa-tiempo {
+        font-size: 10px;
+    }
+
     .mesa-grupo:active .mesa-rect {
         opacity: 0.8;
     }
 
     .mesa-seleccionada .mesa-rect {
-        stroke: var(--brand-secondary);
+        stroke: var(--brand-accent);
         stroke-width: 5;
     }
 
     .mesa-badge {
-        fill: var(--brand-secondary);
-        stroke: #fff;
+        fill: var(--brand-accent);
+        stroke: var(--surface-0);
         stroke-width: 2;
     }
 

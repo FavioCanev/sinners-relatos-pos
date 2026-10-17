@@ -7,6 +7,7 @@
 @inject IJSRuntime JS
 
 <PageTitle>Dashboard</PageTitle>
+<NavModulo Clave="reportes" />
 
 <div class="dashboard-wide">
     <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
@@ -161,34 +162,45 @@
     }
 
     .stat-card {
-        background: var(--brand-bg-alt, #f7f2ea);
-        border-radius: 0.5rem;
-        padding: 1rem 1.25rem;
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radio);
+        padding: 1.1rem 1.25rem;
         display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        border-left: 4px solid var(--brand-primary, #650610);
+        flex-direction: column-reverse;
+        gap: 0.2rem;
+        height: 100%;
     }
 
     .stat-card-alerta {
-        border-left-color: #b8863b;
+        border-color: var(--estado-alerta);
+    }
+
+    .stat-card-alerta .stat-value {
+        color: var(--estado-alerta);
     }
 
     .stat-label {
-        font-size: 0.85rem;
-        color: #6c757d;
+        font-size: 0.9rem;
+        color: var(--text-muted);
     }
 
     .stat-value {
-        font-size: 1.6rem;
+        font-size: 1.85rem;
         font-weight: 700;
+        line-height: 1.15;
     }
 
     .chart-card {
-        background: #fff;
-        border: 1px solid #e5e0d8;
-        border-radius: 0.5rem;
-        padding: 1rem;
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radio);
+        padding: 1.1rem 1.25rem;
+    }
+
+    .chart-card h5, .chart-card h6 {
+        font-weight: 600;
+        margin-bottom: 0.85rem;
     }
 
     .chart-wrap {
@@ -202,35 +214,34 @@
 
     .filtro-marca {
         display: flex;
-        border: 1px solid var(--brand-secondary, #b8863b);
-        border-radius: 0.5rem;
-        overflow: hidden;
+        gap: 0.4rem;
     }
 
     .filtro-marca-btn {
-        border: none;
-        background: #fff;
-        color: var(--brand-secondary-dark, #96692a);
+        border: 1px solid var(--brand-primary-border);
+        border-radius: var(--radio-sm);
+        background: transparent;
+        color: var(--brand-accent);
         padding: 0.375rem 0.9rem;
         font-size: 0.9rem;
         font-weight: 600;
         line-height: 1.5;
     }
 
-    .filtro-marca-btn:not(:last-child) {
-        border-right: 1px solid var(--brand-secondary, #b8863b);
-    }
-
     .filtro-marca-btn.activo {
-        background: var(--brand-secondary, #b8863b);
+        background: var(--brand-primary);
         color: #fff;
     }
 
     .marca-row {
         display: flex;
         justify-content: space-between;
-        padding: 0.5rem 0;
-        border-bottom: 1px solid #eee;
+        padding: 0.6rem 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .marca-row:last-child {
+        border-bottom: none;
     }
 </style>
 
@@ -300,7 +311,7 @@
             var categoria = stockPorCategoria[i];
             var etiquetas = categoria.Productos.Select(p => p.Nombre).ToArray();
             var datos = categoria.Productos.Select(p => p.CantidadDisponible).ToArray();
-            await JS.InvokeVoidAsync("dashboardCharts.renderBarrasVerticales", $"chartStock_{i}", etiquetas, datos, "#650610");
+            await JS.InvokeVoidAsync("dashboardCharts.renderBarrasVerticales", $"chartStock_{i}", etiquetas, datos, "#a8323f");
         }
     }
 
@@ -310,10 +321,10 @@
 
         var etiquetasDias = resumen.VentasPorDia.Select(v => v.Fecha.ToString("dd/MM")).ToArray();
         var totalesDias = resumen.VentasPorDia.Select(v => v.Total).ToArray();
-        await JS.InvokeVoidAsync("dashboardCharts.renderLinea", "chartVentasPorDia", etiquetasDias, totalesDias, "#650610");
+        await JS.InvokeVoidAsync("dashboardCharts.renderLinea", "chartVentasPorDia", etiquetasDias, totalesDias, "#e06373");
 
         var etiquetasProductos = resumen.TopProductos.Select(p => $"{p.Nombre} ({p.Marca})").ToArray();
         var cantidadesProductos = resumen.TopProductos.Select(p => p.CantidadVendida).ToArray();
-        await JS.InvokeVoidAsync("dashboardCharts.renderBarras", "chartTopProductos", etiquetasProductos, cantidadesProductos, "#b8863b");
+        await JS.InvokeVoidAsync("dashboardCharts.renderBarras", "chartTopProductos", etiquetasProductos, cantidadesProductos, "#e06373");
     }
 }

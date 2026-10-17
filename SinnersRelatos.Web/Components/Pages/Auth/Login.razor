@@ -9,7 +9,8 @@
 <PageTitle>Iniciar Sesión</PageTitle>
 
 <div class="login-wrap">
-    <h1 class="text-center mb-4">Sinners &amp; Relatos</h1>
+    <img src="logo.png" alt="Sinners &amp; Relatos" class="login-logo" />
+    <h1 class="text-center mb-4">Iniciar sesión</h1>
 
     <EditForm Model="formulario" OnValidSubmit="IngresarAsync" class="login-card">
         <DataAnnotationsValidator />
@@ -46,9 +47,21 @@
         padding: 1rem;
     }
 
+    .login-logo {
+        display: block;
+        width: 220px;
+        max-width: 70%;
+        margin: 0 auto 1.25rem;
+    }
+
+    .login-wrap h1 {
+        font-size: 1.5rem;
+    }
+
     .login-card {
-        background: var(--brand-bg-alt, #f7f5f3);
-        border-radius: 0.75rem;
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radio);
         padding: 1.5rem;
     }
 </style>

@@ -5,127 +5,51 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href=""><img src="logo.png" alt="Sinners &amp; Relatos" class="navbar-logo" /></a>
-    </div>
+<div class="top-row">
+    <a class="navbar-brand" href=""><img src="logo.png" alt="Sinners &amp; Relatos" class="navbar-logo" /></a>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<input type="checkbox" title="Menú" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="mesas">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Mesas
-            </NavLink>
-        </div>
-
-        @if (esAdministrador)
+    <nav class="rail">
+        @foreach (var modulo in ModulosNavegacion.Todos.Where(m => !m.SoloAdministrador || esAdministrador))
         {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="usuarios">
-                    <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Usuarios
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="categorias">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Categorías
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="productos">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Productos
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="modificadores">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Modificadores
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="ingredientes">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Ingredientes
-                    <AlertaStockBajo />
-                </NavLink>
-            </div>
-        }
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="kds/barra">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> KDS Barra
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="kds/cocina">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> KDS Cocina
-            </NavLink>
-        </div>
-
-        @if (esAdministrador)
-        {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="auditoria">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Auditoría
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="dashboard">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Dashboard
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="herramientas-desarrollo">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Herramientas
-                </NavLink>
-            </div>
+            <a href="@modulo.Paginas[0].Href" class="rail-item @(modulo == moduloActual ? "active" : "")" title="@modulo.Titulo">
+                <span class="rail-icono">
+                    @((MarkupString)modulo.IconoSvg)
+                    @if (modulo.Clave == "catalogo")
+                    {
+                        <AlertaStockBajo />
+                    }
+                </span>
+                <span class="rail-texto">@modulo.Titulo</span>
+            </a>
         }
 
         @if (sesion is not null)
         {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="mi-cuenta">
-                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Mi Cuenta
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3 mt-3 sesion-info">
-                <div class="sesion-nombre">@sesion.NombreCompleto</div>
-                <div class="sesion-rol">@sesion.Rol</div>
-                <button class="btn btn-sm btn-outline-light mt-1" @onclick="CerrarSesionAsync">Cerrar sesión</button>
+            <div class="rail-pie">
+                <a href="mi-cuenta" class="rail-item @(EsMiCuenta ? "active" : "")" title="@sesion.NombreCompleto (@sesion.Rol)">
+                    <span class="rail-icono">@((MarkupString)ModulosNavegacion.IconoCuenta)</span>
+                    <span class="rail-texto">Mi cuenta</span>
+                </a>
+                <button type="button" class="rail-item" title="Cerrar sesión" @onclick="CerrarSesionAsync">
+                    <span class="rail-icono">@((MarkupString)ModulosNavegacion.IconoSalir)</span>
+                    <span class="rail-texto">Salir</span>
+                </button>
             </div>
         }
     </nav>
 </div>
 
-<style>
-    .sesion-info {
-        font-size: 0.85rem;
-        opacity: 0.9;
-        color: white;
-    }
-
-    .sesion-nombre {
-        font-weight: 600;
-        color: white;
-    }
-
-    .sesion-rol {
-        opacity: 0.75;
-        color: white;
-    }
-</style>
-
 @code {
     private UsuarioSesion? sesion;
     private bool esAdministrador;
+
+    private string RutaActual => Navigation.ToBaseRelativePath(Navigation.Uri);
+    private ModuloNavegacion? moduloActual => ModulosNavegacion.DeRuta(RutaActual);
+    private bool EsMiCuenta => RutaActual.StartsWith("mi-cuenta", StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
