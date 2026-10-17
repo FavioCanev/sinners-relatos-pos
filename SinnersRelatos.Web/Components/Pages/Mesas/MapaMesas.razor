@@ -184,13 +184,13 @@ else
     }
 
     .mesa-texto {
-        font-size: 22px;
+        font-size: 26px;
         font-weight: 600;
         pointer-events: none;
     }
 
     .mesa-tiempo {
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 600;
         pointer-events: none;
         fill: #fff;
@@ -268,19 +268,19 @@ else
            ocupar el alto del cuadro de la mesa. Las Barras son bajitas (alto chico), así que
            el nombre no entra al tamaño normal: se achica la letra para que quepa sin salirse. */
         .mesa-tipo-barra .mesa-texto {
-            font-size: 13px;
+            font-size: 15px;
         }
 
         .mesa-tipo-barra .mesa-tiempo {
-            font-size: 9px;
+            font-size: 10px;
         }
 
         .mesa-tipo-mesa .mesa-texto {
-            font-size: 19px;
+            font-size: 25px;
         }
 
         .mesa-tipo-mesa .mesa-tiempo {
-            font-size: 11px;
+            font-size: 14px;
         }
     }
 </style>
@@ -300,35 +300,38 @@ else
 
     private string NombreLocal => marcaInvalida ? "" : marca.ToString();
 
-    // Las mesas (tipo "Mesa") crecieron 20% respecto al tamaño original, centradas en el mismo punto.
-    // Los asientos de barra se dejaron en su tamaño original: están a solo 5px unos de otros y agrandarlos los solaparía.
+    // Las mesas (tipo "Mesa") crecieron otro 15% adicional (35% en total) respecto al tamaño
+    // original, centradas en el mismo punto, para que se lean mejor en celular. Los asientos de
+    // barra se dejaron en su tamaño original: están a solo 5px unos de otros y agrandarlos los
+    // solaparía. Todo el conjunto además quedó recentrado dentro del marco (antes tenía más aire
+    // arriba/izquierda que abajo/derecha, donde quedaban pegadas las Mesas 7, 4 y 2).
     private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutSinners = new()
     {
-        [(TipoMesa.Mesa, 6)] = (61, 80.5, 108, 114),
-        [(TipoMesa.Mesa, 5)] = (271, 80.5, 108, 114),
-        [(TipoMesa.Barra, 1)] = (600, 90, 70, 55),
-        [(TipoMesa.Barra, 2)] = (675, 90, 70, 55),
-        [(TipoMesa.Barra, 3)] = (750, 90, 70, 55),
-        [(TipoMesa.Barra, 4)] = (825, 90, 70, 55),
-        [(TipoMesa.Barra, 5)] = (900, 145, 70, 60),
-        [(TipoMesa.Barra, 6)] = (900, 210, 70, 60),
-        [(TipoMesa.Mesa, 1)] = (551.5, 240.5, 102, 114),
-        [(TipoMesa.Mesa, 3)] = (711, 192, 108, 216),
-        [(TipoMesa.Mesa, 7)] = (61, 420.5, 108, 114),
-        [(TipoMesa.Mesa, 4)] = (271, 420.5, 108, 114),
-        [(TipoMesa.Mesa, 2)] = (491, 420.5, 108, 114),
+        [(TipoMesa.Mesa, 6)] = (41.45, 39.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 5)] = (251.45, 39.45, 124.2, 131.1),
+        [(TipoMesa.Barra, 1)] = (588.55, 57.5, 70, 55),
+        [(TipoMesa.Barra, 2)] = (663.55, 57.5, 70, 55),
+        [(TipoMesa.Barra, 3)] = (738.55, 57.5, 70, 55),
+        [(TipoMesa.Barra, 4)] = (813.55, 57.5, 70, 55),
+        [(TipoMesa.Barra, 5)] = (888.55, 112.5, 70, 60),
+        [(TipoMesa.Barra, 6)] = (888.55, 177.5, 70, 60),
+        [(TipoMesa.Mesa, 1)] = (532.4, 199.45, 117.3, 131.1),
+        [(TipoMesa.Mesa, 3)] = (691.45, 143.3, 124.2, 248.4),
+        [(TipoMesa.Mesa, 7)] = (41.45, 379.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 4)] = (251.45, 379.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 2)] = (471.45, 379.45, 124.2, 131.1),
     };
 
-    // Mesas 20% más grandes que el original, centradas en el mismo punto (aquí sí hay espacio de sobra).
+    // Mismo criterio que Sinners: 35% más grandes que el tamaño original y recentradas en el marco.
     private static readonly Dictionary<(TipoMesa Tipo, int Numero), (double X, double Y, double W, double H)> LayoutRelatos = new()
     {
-        [(TipoMesa.Mesa, 1)] = (71, 80.5, 108, 114),
-        [(TipoMesa.Mesa, 2)] = (551, 80.5, 108, 114),
-        [(TipoMesa.Mesa, 3)] = (771, 80.5, 108, 114),
-        [(TipoMesa.Mesa, 5)] = (71, 340.5, 108, 114),
-        [(TipoMesa.Mesa, 6)] = (301, 340.5, 108, 114),
-        [(TipoMesa.Mesa, 7)] = (551, 340.5, 108, 114),
-        [(TipoMesa.Mesa, 4)] = (771, 340.5, 108, 114),
+        [(TipoMesa.Mesa, 1)] = (87.9, 79.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 2)] = (567.9, 79.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 3)] = (787.9, 79.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 5)] = (87.9, 339.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 6)] = (317.9, 339.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 7)] = (567.9, 339.45, 124.2, 131.1),
+        [(TipoMesa.Mesa, 4)] = (787.9, 339.45, 124.2, 131.1),
     };
 
     private System.Timers.Timer? temporizador;
