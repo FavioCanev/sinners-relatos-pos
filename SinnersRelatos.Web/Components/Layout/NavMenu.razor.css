@@ -21,7 +21,15 @@
 }
 
 .navbar-brand {
-    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+.navbar-logo {
+    max-height: 2.75rem;
+    width: auto;
+    display: block;
 }
 
 .bi {

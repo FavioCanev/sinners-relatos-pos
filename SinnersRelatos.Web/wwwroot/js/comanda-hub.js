@@ -63,7 +63,8 @@ window.comandaHub = (function () {
 
     function imprimirSilencioso(pedidoId) {
         const iframe = document.createElement("iframe");
-        iframe.style.display = "none";
+        // Oculto pero con layout (tamaño 0): con display:none Chrome/Edge ignoran window.print().
+        iframe.style.cssText = "visibility:hidden;position:absolute;width:0;height:0;border:0;";
         iframe.src = `/print/comprobante/${pedidoId}?autoprint=true`;
         document.body.appendChild(iframe);
         setTimeout(() => iframe.remove(), 15000);
