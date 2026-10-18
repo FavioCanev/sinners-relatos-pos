@@ -1,0 +1,255 @@
+@page "/comprobantes"
+@inherits PaginaDeAdministrador
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@using SinnersRelatos.Web.Models
+@using SinnersRelatos.Web.Services.Interfaces
+@using SinnersRelatos.Web.Services.Sunat
+@inject IComprobanteService ComprobanteService
+@inject EnvioSunatWorker EnvioSunat
+@inject SunatOptions Sunat
+
+<PageTitle>Comprobantes</PageTitle>
+<NavModulo Clave="reportes" />
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <h1 class="mb-0 me-auto">Comprobantes</h1>
+    @if (Sunat.Habilitado)
+    {
+        <span class="badge @(Sunat.Produccion ? "bg-success" : "bg-warning")">
+            @(Sunat.Produccion ? "SUNAT: producción" : "SUNAT: ambiente de pruebas")
+        </span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="EnviarAhoraAsync" disabled="@enviando">
+            @(enviando ? "Enviando..." : "Enviar pendientes ahora")
+        </button>
+    }
+</div>
+
+@if (!Sunat.Habilitado)
+{
+    <div class="alert alert-info">
+        La facturación electrónica está desactivada. Las cuentas se cierran sin emitir comprobantes.
+    </div>
+}
+
+@if (facturasPorVencer.Count > 0)
+{
+    <div class="alert alert-danger">
+        <Icono Nombre="alerta" />
+        @facturasPorVencer.Count factura(s) emitida(s) hace más de 2 días siguen sin llegar a SUNAT. El plazo es de 3 días:
+        revisa la conexión a internet de esta PC. (@string.Join(", ", facturasPorVencer.Select(f => f.SerieNumero)))
+    </div>
+}
+
+<div class="row g-2 align-items-end mb-3">
+    <div class="col-6 col-md-3">
+        <label class="form-label" for="desde">Desde</label>
+        <input id="desde" type="date" class="form-control" @bind="desde" @bind:after="CargarAsync" />
+    </div>
+    <div class="col-6 col-md-3">
+        <label class="form-label" for="hasta">Hasta</label>
+        <input id="hasta" type="date" class="form-control" @bind="hasta" @bind:after="CargarAsync" />
+    </div>
+</div>
+
+@if (mensajeError is not null)
+{
+    <div class="alert alert-danger py-2">@mensajeError</div>
+}
+
+@if (cargando)
+{
+    <p><em>Cargando...</em></p>
+}
+else if (comprobantes.Count == 0)
+{
+    <p><em>No hay comprobantes en esas fechas.</em></p>
+}
+else
+{
+    <p class="text-secondary">
+        @comprobantes.Count comprobante(s) ·
+        Total vigente S/ @comprobantes.Where(c => c.Estado is not (EstadoComprobante.Anulado or EstadoComprobante.Rechazado)).Sum(c => c.Total).ToString("0.00")
+    </p>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Comprobante</th>
+                    <th>Cliente</th>
+                    <th class="text-end">Total</th>
+                    <th>Estado SUNAT</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in comprobantes)
+                {
+                    <tr>
+                        <td class="text-nowrap">@c.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td class="text-nowrap">@(c.Tipo == TipoComprobante.Factura ? "Factura" : "Boleta") @c.SerieNumero</td>
+                        <td>
+                            @c.ClienteNombre
+                            @if (c.ClienteNumeroDocumento != "-")
+                            {
+                                <div class="small text-secondary">@c.ClienteNumeroDocumento</div>
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">S/ @c.Total.ToString("0.00")</td>
+                        <td>
+                            <span class="badge @ClaseEstado(c.Estado)">@TextoEstado(c.Estado)</span>
+                            @if (!string.IsNullOrEmpty(c.MensajeRespuesta) && c.Estado != EstadoComprobante.Aceptado)
+                            {
+                                <div class="small text-secondary mensaje-sunat">@c.MensajeRespuesta</div>
+                            }
+                        </td>
+                        <td class="text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="/print/comprobante/@c.PedidoId?autoprint=false" target="_blank">Ver</a>
+                            @if (c.Estado is (EstadoComprobante.Aceptado or EstadoComprobante.Observado) && anulandoId != c.Id)
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => EmpezarAnulacion(c.Id)">Anular</button>
+                            }
+                            @if (c.Estado == EstadoComprobante.Rechazado)
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="() => ReintentarAsync(c.Id)" disabled="@procesando">Reintentar</button>
+                            }
+                        </td>
+                    </tr>
+                    @if (anulandoId == c.Id)
+                    {
+                        <tr>
+                            <td colspan="6">
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <label class="form-label mb-0" for="motivo">Motivo de la anulación</label>
+                                    <input id="motivo" class="form-control form-control-sm motivo-anulacion" @bind="motivoAnulacion" />
+                                    <button class="btn btn-sm btn-danger" @onclick="() => AnularAsync(c.Id)" disabled="@procesando">Sí, anular</button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => anulandoId = null">Cancelar</button>
+                                </div>
+                                <div class="small text-secondary mt-1">
+                                    Se informa a SUNAT en el siguiente envío. La venta y el stock del pedido no cambian.
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+    .mensaje-sunat {
+        max-width: 28rem;
+    }
+
+    .motivo-anulacion {
+        max-width: 22rem;
+    }
+</style>
+
+@code {
+    private List<Comprobante> comprobantes = [];
+    private List<Comprobante> facturasPorVencer = [];
+    private DateOnly desde = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly hasta = DateOnly.FromDateTime(DateTime.Today);
+    private bool cargando = true;
+    private bool enviando;
+    private bool procesando;
+    private int? anulandoId;
+    private string? motivoAnulacion;
+    private string? mensajeError;
+
+    protected override Task OnInitializedConSesionAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        cargando = true;
+        comprobantes = await ComprobanteService.ListarAsync(desde, hasta);
+
+        // Las facturas tienen 3 días para llegar a SUNAT: se avisa desde el segundo.
+        var limite = DateTime.Today.AddDays(-2);
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        facturasPorVencer = (await ComprobanteService.ListarAsync(hoy.AddDays(-7), hoy))
+            .Where(c => c.Tipo == TipoComprobante.Factura && c.Estado == EstadoComprobante.Pendiente && c.FechaEmision.Date <= limite)
+            .ToList();
+        cargando = false;
+    }
+
+    private async Task EnviarAhoraAsync()
+    {
+        enviando = true;
+        mensajeError = null;
+        try
+        {
+            await EnvioSunat.ProcesarAsync();
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "No se pudo completar el envío: " + ex.Message;
+        }
+        enviando = false;
+        await CargarAsync();
+    }
+
+    private void EmpezarAnulacion(int id)
+    {
+        anulandoId = id;
+        motivoAnulacion = null;
+        mensajeError = null;
+    }
+
+    private async Task AnularAsync(int id)
+    {
+        procesando = true;
+        try
+        {
+            await ComprobanteService.SolicitarAnulacionAsync(id, motivoAnulacion ?? "", usuarioActor!.Id);
+            anulandoId = null;
+            EnvioSunat.Despertar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        procesando = false;
+        await CargarAsync();
+    }
+
+    private async Task ReintentarAsync(int id)
+    {
+        procesando = true;
+        mensajeError = null;
+        try
+        {
+            await ComprobanteService.ReintentarAsync(id, usuarioActor!.Id);
+            EnvioSunat.Despertar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeError = ex.Message;
+        }
+        procesando = false;
+        await CargarAsync();
+    }
+
+    private static string TextoEstado(EstadoComprobante estado) => estado switch
+    {
+        EstadoComprobante.Pendiente => "Pendiente de envío",
+        EstadoComprobante.EnResumen => "Enviado, esperando respuesta",
+        EstadoComprobante.Aceptado => "Aceptado",
+        EstadoComprobante.Observado => "Aceptado con observaciones",
+        EstadoComprobante.Rechazado => "Rechazado",
+        EstadoComprobante.PorAnular => "Anulación pendiente",
+        EstadoComprobante.EnAnulacion => "Anulación enviada",
+        EstadoComprobante.Anulado => "Anulado",
+        _ => estado.ToString()
+    };
+
+    private static string ClaseEstado(EstadoComprobante estado) => estado switch
+    {
+        EstadoComprobante.Aceptado => "bg-success",
+        EstadoComprobante.Observado => "bg-warning",
+        EstadoComprobante.Rechazado => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

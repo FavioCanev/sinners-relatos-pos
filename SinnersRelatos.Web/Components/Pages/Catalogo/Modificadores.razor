@@ -139,7 +139,7 @@ else
                                             <button class="btn btn-sm btn-outline-success" @onclick="() => CambiarEstadoOpcionAsync(opcion.Id, true, grupo.Id)">Activar</button>
                                         }
                                         <button class="btn btn-sm btn-outline-primary" @onclick="() => ToggleRecetaOpcion(opcion.Id)">
-                                            🧪 Ingredientes (@opcion.Recetas.Count)
+                                            <Icono Nombre="matraz" /> Ingredientes (@opcion.Recetas.Count)
                                         </button>
                                     </td>
                                 </tr>

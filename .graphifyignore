@@ -1,0 +1,4 @@
+# Librerías de terceros minificadas: no son código del proyecto.
+SinnersRelatos.Web/wwwroot/lib/
+# Migraciones autogeneradas por Entity Framework.
+SinnersRelatos.Web/Migrations/

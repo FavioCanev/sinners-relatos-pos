@@ -38,6 +38,97 @@ namespace SinnersRelatos.Web.Migrations
                     b.ToTable("Categorias");
                 });
 
+            modelBuilder.Entity("SinnersRelatos.Web.Models.Comprobante", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Cdr")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("ClienteDireccion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClienteNombre")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClienteNumeroDocumento")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClienteTipoDocumento")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CodigoRespuesta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FechaEmision")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Hash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Igv")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MensajeRespuesta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("OperacionesGravadas")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PedidoId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PorConsumo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Serie")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TasaIgv")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("XmlFirmado")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("FechaEmision");
+
+                    b.HasIndex("PedidoId");
+
+                    b.HasIndex("Serie", "Numero")
+                        .IsUnique();
+
+                    b.ToTable("Comprobantes");
+                });
+
             modelBuilder.Entity("SinnersRelatos.Web.Models.ConfiguracionSistema", b =>
                 {
                     b.Property<int>("Id")
@@ -140,6 +231,68 @@ namespace SinnersRelatos.Web.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Empleados");
+                });
+
+            modelBuilder.Entity("SinnersRelatos.Web.Models.EnvioSunat", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<byte[]>("Cdr")
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("CodigoRespuesta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("FechaComprobantes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FechaGeneracion")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Identificador")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MensajeRespuesta")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Ticket")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("Identificador")
+                        .IsUnique();
+
+                    b.ToTable("EnviosSunat");
+                });
+
+            modelBuilder.Entity("SinnersRelatos.Web.Models.EnvioSunatDetalle", b =>
+                {
+                    b.Property<int>("EnvioSunatId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ComprobanteId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("EsAnulacion")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("EnvioSunatId", "ComprobanteId");
+
+                    b.HasIndex("ComprobanteId");
+
+                    b.ToTable("EnviosSunatDetalle");
                 });
 
             modelBuilder.Entity("SinnersRelatos.Web.Models.GrupoModificador", b =>
@@ -512,6 +665,17 @@ namespace SinnersRelatos.Web.Migrations
                     b.ToTable("Usuarios");
                 });
 
+            modelBuilder.Entity("SinnersRelatos.Web.Models.Comprobante", b =>
+                {
+                    b.HasOne("SinnersRelatos.Web.Models.Pedido", "Pedido")
+                        .WithMany()
+                        .HasForeignKey("PedidoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Pedido");
+                });
+
             modelBuilder.Entity("SinnersRelatos.Web.Models.DetallePedido", b =>
                 {
                     b.HasOne("SinnersRelatos.Web.Models.Pedido", "Pedido")
@@ -548,6 +712,25 @@ namespace SinnersRelatos.Web.Migrations
                     b.Navigation("DetallePedido");
 
                     b.Navigation("OpcionModificador");
+                });
+
+            modelBuilder.Entity("SinnersRelatos.Web.Models.EnvioSunatDetalle", b =>
+                {
+                    b.HasOne("SinnersRelatos.Web.Models.Comprobante", "Comprobante")
+                        .WithMany()
+                        .HasForeignKey("ComprobanteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SinnersRelatos.Web.Models.EnvioSunat", "EnvioSunat")
+                        .WithMany("Detalles")
+                        .HasForeignKey("EnvioSunatId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Comprobante");
+
+                    b.Navigation("EnvioSunat");
                 });
 
             modelBuilder.Entity("SinnersRelatos.Web.Models.LogAuditoria", b =>
@@ -719,6 +902,11 @@ namespace SinnersRelatos.Web.Migrations
             modelBuilder.Entity("SinnersRelatos.Web.Models.Empleado", b =>
                 {
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("SinnersRelatos.Web.Models.EnvioSunat", b =>
+                {
+                    b.Navigation("Detalles");
                 });
 
             modelBuilder.Entity("SinnersRelatos.Web.Models.GrupoModificador", b =>

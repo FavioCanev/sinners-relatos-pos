@@ -1,0 +1,21 @@
+{
+  "Sunat": {
+    "Habilitado": true,
+    "Produccion": false,
+
+    "Ruc": "20XXXXXXXXX",
+    "RazonSocial": "RAZON SOCIAL TAL COMO FIGURA EN EL RUC",
+    "NombreComercial": "Sinners & Relatos",
+    "Direccion": "Dirección fiscal",
+    "Ubigeo": "150101",
+
+    "SerieBoleta": "B001",
+    "SerieFactura": "F001",
+    "TasaIgv": 10.5,
+
+    "UsuarioSol": "USUARIO_SECUNDARIO",
+    "ClaveSol": "CLAVE_SECUNDARIA",
+    "CertificadoRuta": "certificado.pfx",
+    "CertificadoClave": "CLAVE_DEL_CERTIFICADO"
+  }
+}
