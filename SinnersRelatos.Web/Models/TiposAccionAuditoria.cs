@@ -9,6 +9,7 @@ public static class TiposAccionAuditoria
     public const string ActualizarUsuario = "Actualizar usuario";
     public const string CambiarPassword = "Cambiar contraseña";
     public const string CambiarEstadoUsuario = "Cambiar estado de usuario";
+    public const string ActualizarDatosPropios = "Actualizar mis datos";
 
     public const string CrearCategoria = "Crear categoría";
     public const string ActualizarCategoria = "Actualizar categoría";

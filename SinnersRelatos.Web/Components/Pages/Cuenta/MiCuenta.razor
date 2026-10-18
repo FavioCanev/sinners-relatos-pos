@@ -2,6 +2,7 @@
 @inherits PaginaConSesion
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @using System.ComponentModel.DataAnnotations
+@using SinnersRelatos.Web.Models
 @using SinnersRelatos.Web.Services.Interfaces
 @inject IUsuarioService UsuarioService
 
@@ -17,6 +18,60 @@ else
     <p class="text-muted">@usuarioActor.NombreCompleto · @usuarioActor.Rol</p>
 
     <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Mis datos</h5>
+
+                    @if (usuario is null)
+                    {
+                        <p><em>Cargando...</em></p>
+                    }
+                    else
+                    {
+                        <dl class="datos-cuenta">
+                            <dt>Nombres</dt><dd>@usuario.Empleado.Nombres</dd>
+                            <dt>Apellidos</dt><dd>@usuario.Empleado.Apellidos</dd>
+                            <dt>Rol</dt><dd>@usuario.Rol</dd>
+                            <dt>Contratado desde</dt><dd>@usuario.Empleado.FechaContratacion.ToString("dd/MM/yyyy")</dd>
+                        </dl>
+                        <p class="text-muted small">Para corregir tu nombre o tu rol, pídeselo a un administrador.</p>
+
+                        @if (mensajeExitoDatos is not null)
+                        {
+                            <div class="alert alert-success py-2">@mensajeExitoDatos</div>
+                        }
+                        @if (mensajeErrorDatos is not null)
+                        {
+                            <div class="alert alert-danger py-2">@mensajeErrorDatos</div>
+                        }
+
+                        <div class="mb-2">
+                            <label class="form-label" for="telefono">Teléfono</label>
+                            <input id="telefono" class="form-control" type="tel" inputmode="tel" autocomplete="tel" @bind="telefono" />
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="nombreUsuario">Usuario</label>
+                            <input id="nombreUsuario" class="form-control" autocomplete="username" @bind="nombreUsuario" @bind:event="oninput" />
+                            <div class="form-text">Es con lo que inicias sesión.</div>
+                        </div>
+                        @if (CambiaUsuario)
+                        {
+                            <div class="mb-2">
+                                <label class="form-label" for="passwordDatos">Tu contraseña actual</label>
+                                <input id="passwordDatos" class="form-control" type="password" autocomplete="current-password" @bind="passwordDatos" />
+                                <div class="form-text">Se pide para confirmar el cambio de usuario.</div>
+                            </div>
+                        }
+
+                        <button class="btn btn-primary mt-2" @onclick="GuardarDatosAsync" disabled="@guardandoDatos">
+                            @(guardandoDatos ? "Guardando..." : "Guardar cambios")
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
         <div class="col-md-6">
             <div class="card">
                 <div class="card-body">
@@ -62,8 +117,64 @@ else
     </div>
 }
 
+<style>
+    .datos-cuenta {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.35rem 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .datos-cuenta dt {
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    .datos-cuenta dd {
+        margin: 0;
+    }
+</style>
+
 @code {
     private readonly FormularioPassword formPassword = new();
+
+    private Usuario? usuario;
+    private string? telefono;
+    private string nombreUsuario = "";
+    private string? passwordDatos;
+    private bool guardandoDatos;
+    private string? mensajeErrorDatos;
+    private string? mensajeExitoDatos;
+
+    private bool CambiaUsuario => usuario is not null && nombreUsuario.Trim() != usuario.NombreUsuario;
+
+    protected override Task OnInitializedConSesionAsync() => CargarDatosAsync();
+
+    private async Task CargarDatosAsync()
+    {
+        usuario = await UsuarioService.ObtenerPorIdAsync(usuarioActor!.Id);
+        telefono = usuario?.Empleado.Telefono;
+        nombreUsuario = usuario?.NombreUsuario ?? "";
+        passwordDatos = null;
+    }
+
+    private async Task GuardarDatosAsync()
+    {
+        guardandoDatos = true;
+        mensajeErrorDatos = null;
+        mensajeExitoDatos = null;
+        try
+        {
+            await UsuarioService.ActualizarDatosPropiosAsync(usuarioActor!.Id, telefono, nombreUsuario, passwordDatos);
+            await CargarDatosAsync();
+            mensajeExitoDatos = "Datos actualizados.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeErrorDatos = ex.Message;
+        }
+        guardandoDatos = false;
+    }
 
     private bool cambiandoPassword;
     private string? mensajeErrorPassword;

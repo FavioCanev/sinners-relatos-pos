@@ -43,6 +43,8 @@ public static class ComprobanteHtml
             body { font-family: 'Courier New', monospace; margin: 0; padding: 16px; color: #111; background: #fff; }
             .comprobante { max-width: 320px; margin: 0 auto; }
             h1 { font-size: 1.1rem; text-align: center; margin: 0; }
+            .logos { display: flex; align-items: center; justify-content: center; gap: 0.9rem; margin: 0 0 0.6rem; }
+            .logos img { height: 2.9rem; max-width: 48%; object-fit: contain; }
             .subtitulo { text-align: center; font-size: 0.8rem; margin: 0.2rem 0 0; color: #555; }
             .linea { border-top: 1px dashed #999; margin: 0.7rem 0; }
             .datos div { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.15rem; }
@@ -74,6 +76,7 @@ public static class ComprobanteHtml
             <body>
                 {botonManual}
                 <div class="comprobante">
+                    <div class="logos"><img src="/ticket-sinners.png" alt="Sinners" /><img src="/ticket-relatos.png" alt="Relatos" /></div>
                     {Encabezado(comprobante, emisor)}
                     <div class="linea"></div>
                     <div class="datos">

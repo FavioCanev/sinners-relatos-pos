@@ -133,4 +133,48 @@ public class UsuarioService(IDbContextFactory<AppDbContext> contextFactory, IPas
 
         return true;
     }
+
+    public async Task ActualizarDatosPropiosAsync(int usuarioId, string? telefono, string nombreUsuario, string? passwordActual)
+    {
+        await using var context = await contextFactory.CreateDbContextAsync();
+
+        var usuario = await context.Usuarios.Include(u => u.Empleado).FirstOrDefaultAsync(u => u.Id == usuarioId)
+            ?? throw new InvalidOperationException($"Usuario {usuarioId} no encontrado.");
+
+        nombreUsuario = nombreUsuario.Trim();
+        telefono = string.IsNullOrWhiteSpace(telefono) ? null : telefono.Trim();
+
+        if (nombreUsuario.Length == 0)
+            throw new InvalidOperationException("El nombre de usuario es obligatorio.");
+        if (nombreUsuario.Any(char.IsWhiteSpace))
+            throw new InvalidOperationException("El nombre de usuario no puede tener espacios.");
+
+        var usuarioAnterior = usuario.NombreUsuario;
+        var cambios = new List<string>();
+
+        if (nombreUsuario != usuarioAnterior)
+        {
+            // Es con lo que se inicia sesión: se confirma que quien lo cambia es el titular.
+            if (string.IsNullOrEmpty(passwordActual) || !passwordHasher.Verify(passwordActual, usuario.PasswordHash))
+                throw new InvalidOperationException("Para cambiar tu usuario, ingresa tu contraseña actual correcta.");
+            if (await context.Usuarios.AnyAsync(u => u.NombreUsuario == nombreUsuario && u.Id != usuarioId))
+                throw new InvalidOperationException($"El nombre de usuario '{nombreUsuario}' ya está en uso.");
+
+            usuario.NombreUsuario = nombreUsuario;
+            cambios.Add($"usuario '{usuarioAnterior}' → '{nombreUsuario}'");
+        }
+
+        if (telefono != usuario.Empleado.Telefono)
+        {
+            usuario.Empleado.Telefono = telefono;
+            cambios.Add("teléfono");
+        }
+
+        if (cambios.Count == 0)
+            return;
+
+        await context.SaveChangesAsync();
+        await auditoria.RegistrarAsync(usuarioId, TiposAccionAuditoria.ActualizarDatosPropios,
+            $"'{usuarioAnterior}' actualizó sus datos: {string.Join(", ", cambios)}.");
+    }
 }
