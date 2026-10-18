@@ -38,6 +38,8 @@ public static class TiposAccionAuditoria
     public const string AnularPedido = "Anular pedido";
     public const string CerrarPedido = "Cerrar cuenta / liberar mesa";
     public const string FusionarMesas = "Fusionar mesas";
+    public const string AnularComprobante = "Anular comprobante";
+    public const string ReintentarComprobante = "Reintentar comprobante";
 
     public const string CrearPreset = "Crear combo";
     public const string ActualizarPreset = "Actualizar combo";

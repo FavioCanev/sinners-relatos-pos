@@ -38,7 +38,7 @@ public interface IPedidoService
     Task ConfirmarItemsAsync(int pedidoId, IEnumerable<ItemCarrito> items, int actorUsuarioId);
     Task EliminarItemAsync(int detallePedidoId, int actorUsuarioId);
     Task AnularAsync(int pedidoId, int actorUsuarioId);
-    Task CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId);
+    Task<Comprobante?> CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId, DatosComprobante? datosComprobante = null);
     Task<Pedido> FusionarAsync(IEnumerable<int> mesaIds, int usuarioId);
     Task<List<ItemKds>> ListarParaKdsAsync(DestinoPreparacion destino);
     Task MarcarEnPreparacionAsync(int detallePedidoId);

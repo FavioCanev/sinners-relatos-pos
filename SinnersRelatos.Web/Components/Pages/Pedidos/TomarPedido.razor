@@ -6,6 +6,7 @@
 @inject IMesaService MesaService
 @inject IProductoService ProductoService
 @inject IPedidoService PedidoService
+@inject IComprobanteService ComprobanteService
 @inject IPresetService PresetService
 @inject ISesionService SesionService
 @inject NavigationManager Navigation
@@ -244,6 +245,86 @@ else
                 </div>
 
                 @ContenidoCarrito
+            </div>
+        </div>
+    }
+
+    @if (mostrandoCierre)
+    {
+        var totalCuenta = TotalConfirmado;
+        <div class="overlay" @onclick="CerrarPanelCierre">
+            <div class="panel-modal panel-cierre" @onclick:stopPropagation="true">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0">Cerrar cuenta</h5>
+                    <button class="btn-close" aria-label="Cerrar" @onclick="CerrarPanelCierre"></button>
+                </div>
+
+                <div class="cierre-total">
+                    <span>Total a cobrar</span>
+                    <strong>S/ @totalCuenta.ToString("0.00")</strong>
+                </div>
+
+                <div class="cierre-tipos" role="group" aria-label="Tipo de comprobante">
+                    <button type="button" class="btn @(tipoComprobante == TipoComprobante.Boleta ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => tipoComprobante = TipoComprobante.Boleta">Boleta</button>
+                    <button type="button" class="btn @(tipoComprobante == TipoComprobante.Factura ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => tipoComprobante = TipoComprobante.Factura">Factura</button>
+                </div>
+
+                <div class="cierre-detalle" role="group" aria-label="Detalle del comprobante">
+                    <button type="button" class="btn btn-sm @(porConsumo ? "btn-outline-secondary" : "btn-secondary activo")"
+                            @onclick="() => porConsumo = false">Detallada</button>
+                    <button type="button" class="btn btn-sm @(porConsumo ? "btn-secondary activo" : "btn-outline-secondary")"
+                            @onclick="() => porConsumo = true">Por consumo</button>
+                </div>
+
+                @if (!PideDatosCliente(totalCuenta))
+                {
+                    <button type="button" class="btn btn-link btn-sm px-0 mb-2" @onclick="() => mostrandoDatosCliente = true">+ Agregar DNI / nombre del cliente</button>
+                }
+                else
+                {
+                <div class="mb-2">
+                    <label class="form-label" for="cierreDocumento">
+                        @(tipoComprobante == TipoComprobante.Factura ? "RUC del cliente" : "DNI o RUC del cliente")
+                        @if (tipoComprobante == TipoComprobante.Boleta && totalCuenta <= 700)
+                        {
+                            <span class="text-secondary ms-1">(opcional)</span>
+                        }
+                    </label>
+                    <input id="cierreDocumento" class="form-control" inputmode="numeric" maxlength="11" autocomplete="off" @bind="documentoCliente" />
+                </div>
+                <div class="mb-2">
+                    <label class="form-label" for="cierreNombre">@(tipoComprobante == TipoComprobante.Factura ? "Razón social" : "Nombre del cliente")</label>
+                    <input id="cierreNombre" class="form-control" autocomplete="off" @bind="nombreCliente" />
+                </div>
+                @if (tipoComprobante == TipoComprobante.Factura)
+                {
+                    <div class="mb-2">
+                        <label class="form-label" for="cierreDireccion">Dirección <span class="text-secondary ms-1">(opcional)</span></label>
+                        <input id="cierreDireccion" class="form-control" autocomplete="off" @bind="direccionCliente" />
+                    </div>
+                }
+                }
+                <div class="mb-3">
+                    <label class="form-label" for="cierreMedioPago">Medio de pago</label>
+                    <select id="cierreMedioPago" class="form-select" @onchange="OnMedioPagoChange">
+                        <option value="">Elegir...</option>
+                        @foreach (var medio in Enum.GetValues<MedioPago>())
+                        {
+                            <option value="@medio" selected="@(medioPagoSeleccionado == medio)">@medio</option>
+                        }
+                    </select>
+                </div>
+
+                @if (mensajeErrorCierre is not null)
+                {
+                    <div class="alert alert-danger py-2">@mensajeErrorCierre</div>
+                }
+
+                <button class="btn btn-success w-100" @onclick="EmitirYCerrarAsync" disabled="@(medioPagoSeleccionado is null || cerrandoCuenta)">
+                    @(cerrandoCuenta ? "Emitiendo..." : $"Emitir {(tipoComprobante == TipoComprobante.Factura ? "factura" : "boleta")} y cerrar")
+                </button>
             </div>
         </div>
     }
@@ -736,6 +817,43 @@ else
         width: auto;
     }
 
+    .panel-cierre {
+        max-width: 440px;
+    }
+
+    .cierre-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radio-sm);
+    }
+
+    .cierre-total strong {
+        font-size: 1.35rem;
+    }
+
+    .cierre-detalle {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .cierre-detalle .activo {
+        border-color: var(--brand-accent);
+    }
+
+    .cierre-tipos {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+
     .cantidad-preset {
         width: 70px;
         flex: none;
@@ -836,6 +954,14 @@ else
     private bool confirmandoCierre;
     private MedioPago? medioPagoSeleccionado;
     private bool cerrandoCuenta;
+    private bool mostrandoCierre;
+    private bool porConsumo;
+    private bool mostrandoDatosCliente;
+    private TipoComprobante tipoComprobante = TipoComprobante.Boleta;
+    private string? documentoCliente;
+    private string? nombreCliente;
+    private string? direccionCliente;
+    private string? mensajeErrorCierre;
     private bool solicitandoImpresion;
     private bool impresionSolicitada;
     private int? detalleEliminando;
@@ -1331,8 +1457,66 @@ else
 
     private void AbrirConfirmacionCierre()
     {
-        confirmandoCierre = true;
         medioPagoSeleccionado = null;
+        // Sin consumo no hay nada que facturar: se cierra como siempre (solo libera la mesa).
+        if (!ComprobanteService.Habilitado || TotalConfirmado == 0)
+        {
+            confirmandoCierre = true;
+            return;
+        }
+
+        tipoComprobante = TipoComprobante.Boleta;
+        porConsumo = mostrandoDatosCliente = false;
+        documentoCliente = nombreCliente = direccionCliente = null;
+        mensajeErrorCierre = null;
+        mostrandoCierre = true;
+    }
+
+    private void CerrarPanelCierre()
+    {
+        if (!cerrandoCuenta)
+            mostrandoCierre = false;
+    }
+
+    // La boleta casi nunca lleva datos del cliente: se piden solo si se abren a mano, si es
+    // factura, o si el monto los hace obligatorios.
+    private bool PideDatosCliente(decimal total) =>
+        mostrandoDatosCliente || tipoComprobante == TipoComprobante.Factura || total > 700;
+
+    private decimal TotalConfirmado =>
+        yaConfirmados.Sum(d => d.Cantidad * (d.PrecioUnitario + d.Modificadores.Sum(m => m.PrecioAdicional)));
+
+    private async Task EmitirYCerrarAsync()
+    {
+        if (pedido is null || medioPagoSeleccionado is not { } medio)
+            return;
+
+        // Si los campos del cliente están ocultos, no se envía lo que haya quedado escrito en ellos.
+        var conCliente = PideDatosCliente(TotalConfirmado);
+        var datos = new DatosComprobante(tipoComprobante,
+            conCliente ? documentoCliente : null,
+            conCliente ? nombreCliente : null,
+            tipoComprobante == TipoComprobante.Factura ? direccionCliente : null,
+            porConsumo);
+        mensajeErrorCierre = ComprobanteService.Validar(datos, TotalConfirmado);
+        if (mensajeErrorCierre is not null)
+            return;
+
+        cerrandoCuenta = true;
+        try
+        {
+            await PedidoService.CerrarAsync(pedido.Id, medio, usuario!.Id, datos);
+        }
+        catch (InvalidOperationException ex)
+        {
+            mensajeErrorCierre = ex.Message;
+            cerrandoCuenta = false;
+            return;
+        }
+
+        // El comprobante se imprime en la estación de impresión, como la precuenta.
+        await PedidoService.SolicitarImpresionAsync(pedido.Id);
+        Navigation.NavigateTo($"/mesas/{mesa!.Marca.ToString().ToLowerInvariant()}");
     }
 
     private void OnMedioPagoChange(ChangeEventArgs e) =>

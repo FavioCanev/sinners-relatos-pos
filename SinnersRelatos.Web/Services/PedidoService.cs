@@ -4,10 +4,17 @@ using SinnersRelatos.Web.Data;
 using SinnersRelatos.Web.Hubs;
 using SinnersRelatos.Web.Models;
 using SinnersRelatos.Web.Services.Interfaces;
+using SinnersRelatos.Web.Services.Sunat;
 
 namespace SinnersRelatos.Web.Services;
 
-public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubContext<ComandaHub> hub, IAuditoriaService auditoria) : IPedidoService
+public class PedidoService(
+    IDbContextFactory<AppDbContext> contextFactory,
+    IHubContext<ComandaHub> hub,
+    IAuditoriaService auditoria,
+    IComprobanteService comprobantes,
+    EnvioSunatWorker envioSunat,
+    ILogger<PedidoService> logger) : IPedidoService
 {
     public async Task<Pedido> ObtenerOCrearPedidoAsync(int mesaId, int usuarioId)
     {
@@ -287,27 +294,70 @@ public class PedidoService(IDbContextFactory<AppDbContext> contextFactory, IHubC
             await hub.Clients.All.SendAsync(ComandaEventos.AlertaStockActualizada);
     }
 
-    public async Task CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId)
+    public async Task<Comprobante?> CerrarAsync(int pedidoId, MedioPago medioPago, int actorUsuarioId, DatosComprobante? datosComprobante = null)
     {
-        await using var context = await contextFactory.CreateDbContextAsync();
+        // Sin datos de comprobante (o con la facturación apagada) se cierra como siempre. Así las
+        // herramientas de prueba, que simulan cierres, nunca emiten comprobantes.
+        var emitir = datosComprobante is not null && comprobantes.Habilitado;
 
-        var pedido = await context.Pedidos
-            .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
-            .FirstOrDefaultAsync(p => p.Id == pedidoId)
-            ?? throw new InvalidOperationException($"Pedido {pedidoId} no encontrado.");
+        // Reintento solo para el caso en que otro cierre simultáneo tomó el mismo correlativo.
+        for (var intento = 1; ; intento++)
+        {
+            await using var context = await contextFactory.CreateDbContextAsync();
 
-        var etiqueta = string.Join(" + ", pedido.Mesas.Select(pm =>
-            $"{(pm.Mesa.Tipo == TipoMesa.Barra ? "Barra" : "Mesa")} {pm.Mesa.Numero}"));
+            var pedido = await context.Pedidos
+                .Include(p => p.Mesas).ThenInclude(pm => pm.Mesa)
+                .Include(p => p.Detalles).ThenInclude(d => d.Producto)
+                .Include(p => p.Detalles).ThenInclude(d => d.Modificadores).ThenInclude(m => m.OpcionModificador)
+                .FirstOrDefaultAsync(p => p.Id == pedidoId)
+                ?? throw new InvalidOperationException($"Pedido {pedidoId} no encontrado.");
 
-        pedido.Estado = EstadoPedido.Cerrado;
-        pedido.FechaCierre = DateTime.Now;
-        pedido.MedioPago = medioPago;
-        await context.SaveChangesAsync();
+            var etiqueta = string.Join(" + ", pedido.Mesas.Select(pm =>
+                $"{(pm.Mesa.Tipo == TipoMesa.Barra ? "Barra" : "Mesa")} {pm.Mesa.Numero}"));
 
-        await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.CerrarPedido,
-            $"Cerró la cuenta y liberó el pedido #{pedidoId} ({etiqueta}), pago con {medioPago}.");
+            Comprobante? comprobante = null;
+            var total = pedido.Detalles.Sum(d => d.Cantidad * (d.PrecioUnitario + d.Modificadores.Sum(m => m.PrecioAdicional)));
+            if (emitir && total > 0)
+            {
+                if (comprobantes.Validar(datosComprobante!, total) is { } error)
+                    throw new InvalidOperationException(error);
+                comprobante = comprobantes.Crear(context, pedido, datosComprobante!);
+            }
 
-        await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
+            pedido.Estado = EstadoPedido.Cerrado;
+            pedido.FechaCierre = DateTime.Now;
+            pedido.MedioPago = medioPago;
+
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateException) when (comprobante is not null && intento < 3)
+            {
+                continue;
+            }
+
+            await auditoria.RegistrarAsync(actorUsuarioId, TiposAccionAuditoria.CerrarPedido,
+                $"Cerró la cuenta y liberó el pedido #{pedidoId} ({etiqueta}), pago con {medioPago}" +
+                (comprobante is null ? "." : $", {comprobante.Tipo} {comprobante.SerieNumero}."));
+
+            if (comprobante is not null)
+            {
+                // La cuenta ya quedó cerrada: si firmar fallara, el envío en segundo plano lo reintenta.
+                try
+                {
+                    await comprobantes.GenerarXmlAsync(comprobante.Id);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "No se pudo generar el XML de {Comprobante}", comprobante.SerieNumero);
+                }
+                envioSunat.Despertar();
+            }
+
+            await hub.Clients.All.SendAsync(ComandaEventos.PedidoActualizado);
+            return comprobante;
+        }
     }
 
     public async Task<Pedido> FusionarAsync(IEnumerable<int> mesaIds, int usuarioId)

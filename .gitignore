@@ -38,3 +38,7 @@ deploy/*.zip
 
 # Análisis de graphify (se regenera)
 graphify-out/
+
+# Datos de facturación electrónica (Clave SOL y certificado): solo viven en la PC del negocio
+sunat.json
+*.pfx

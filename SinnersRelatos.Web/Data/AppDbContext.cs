@@ -24,6 +24,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ConfiguracionSistema> ConfiguracionSistema => Set<ConfiguracionSistema>();
     public DbSet<Preset> Presets => Set<Preset>();
     public DbSet<PresetProducto> PresetProductos => Set<PresetProducto>();
+    public DbSet<Comprobante> Comprobantes => Set<Comprobante>();
+    public DbSet<EnvioSunat> EnviosSunat => Set<EnvioSunat>();
+    public DbSet<EnvioSunatDetalle> EnviosSunatDetalle => Set<EnvioSunatDetalle>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -223,6 +226,44 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(pp => pp.Producto)
                 .WithMany()
                 .HasForeignKey(pp => pp.ProductoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Comprobante>(entity =>
+        {
+            entity.HasIndex(c => new { c.Serie, c.Numero }).IsUnique();
+            entity.HasIndex(c => c.FechaEmision);
+            entity.HasIndex(c => c.Estado);
+            entity.Property(c => c.TasaIgv).HasPrecision(5, 2);
+            entity.Property(c => c.OperacionesGravadas).HasPrecision(10, 2);
+            entity.Property(c => c.Igv).HasPrecision(10, 2);
+            entity.Property(c => c.Total).HasPrecision(10, 2);
+
+            // Restrict: un pedido con comprobante emitido no se puede borrar (hay que conservarlo).
+            entity.HasOne(c => c.Pedido)
+                .WithMany()
+                .HasForeignKey(c => c.PedidoId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EnvioSunat>(entity =>
+        {
+            entity.HasIndex(e => e.Identificador).IsUnique();
+            entity.HasIndex(e => e.Estado);
+        });
+
+        modelBuilder.Entity<EnvioSunatDetalle>(entity =>
+        {
+            entity.HasKey(d => new { d.EnvioSunatId, d.ComprobanteId });
+
+            entity.HasOne(d => d.EnvioSunat)
+                .WithMany(e => e.Detalles)
+                .HasForeignKey(d => d.EnvioSunatId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(d => d.Comprobante)
+                .WithMany()
+                .HasForeignKey(d => d.ComprobanteId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

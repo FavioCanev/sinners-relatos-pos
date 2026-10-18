@@ -5,6 +5,7 @@ using SinnersRelatos.Web.Data;
 using SinnersRelatos.Web.Hubs;
 using SinnersRelatos.Web.Services;
 using SinnersRelatos.Web.Services.Interfaces;
+using SinnersRelatos.Web.Services.Sunat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,6 +52,16 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IHerramientasDesarrolloService, HerramientasDesarrolloService>();
 builder.Services.AddScoped<IPresetService, PresetService>();
 
+// Facturación electrónica. Los datos sensibles (Clave SOL, certificado) van en "sunat.json" junto
+// al ejecutable, en la PC del negocio: no está en el repositorio y el instalador no lo pisa.
+builder.Configuration.AddJsonFile(Path.Combine(AppContext.BaseDirectory, "sunat.json"), optional: true, reloadOnChange: false);
+builder.Services.AddSingleton(builder.Configuration.GetSection("Sunat").Get<SunatOptions>() ?? new SunatOptions());
+builder.Services.AddSingleton<FirmaDigital>();
+builder.Services.AddHttpClient(nameof(SunatClient), http => http.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<IComprobanteService, ComprobanteService>();
+builder.Services.AddSingleton<EnvioSunatWorker>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EnvioSunatWorker>());
+
 var app = builder.Build();
 
 // Migración y seed corren siempre, no solo en Development: ambas operaciones son idempotentes
@@ -90,12 +101,15 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 app.MapHub<ComandaHub>("/hubs/comanda");
 
-app.MapGet("/print/comprobante/{pedidoId:int}", async (int pedidoId, bool autoprint, IPedidoService pedidoService) =>
+app.MapGet("/print/comprobante/{pedidoId:int}", async (int pedidoId, bool autoprint, IPedidoService pedidoService,
+    IComprobanteService comprobanteService, SunatOptions sunat) =>
 {
     var pedido = await pedidoService.ObtenerConDetalleAsync(pedidoId);
-    return pedido is null
-        ? Results.NotFound()
-        : Results.Content(ComprobanteHtml.Construir(pedido, autoprint), "text/html");
+    if (pedido is null)
+        return Results.NotFound();
+
+    var comprobante = await comprobanteService.ObtenerDePedidoAsync(pedidoId);
+    return Results.Content(ComprobanteHtml.Construir(pedido, autoprint, comprobante, sunat), "text/html");
 });
 
 app.Run();

@@ -34,7 +34,7 @@ public static class ModulosNavegacion
         new("reportes", "Reportes",
             Svg + "<path d='M21 12A9 9 0 1 1 12 3v9z'/><path d='M15 3.5A9 9 0 0 1 20.5 9H15z'/></svg>",
             true,
-            [new("dashboard", "Dashboard"), new("auditoria", "Auditoría")]),
+            [new("dashboard", "Dashboard"), new("comprobantes", "Comprobantes"), new("auditoria", "Auditoría")]),
         new("admin", "Admin",
             Svg + "<circle cx='9' cy='8' r='3.5'/><path d='M2.5 20a6.5 6.5 0 0 1 13 0'/><path d='M16 4.5a3.5 3.5 0 0 1 0 7'/><path d='M18 14a6 6 0 0 1 3.5 6'/></svg>",
             true,

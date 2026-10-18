@@ -41,8 +41,8 @@ if ($servicio) {
 
 if ($PSScriptRoot.TrimEnd('\') -ne $destino.TrimEnd('\')) {
     Write-Host "Copiando archivos a $destino ..."
-    # La base de datos queda fuera de la copia: ni se pisa ni se borra. Códigos de salida < 8 = OK.
-    robocopy $PSScriptRoot $destino /E /R:2 /W:2 /NP /NFL /NDL /NJH /NJS /XF sinnersrelatos.db sinnersrelatos.db-shm sinnersrelatos.db-wal | Out-Null
+    # La base de datos y los datos de SUNAT (sunat.json, certificado) quedan fuera de la copia: ni se pisan ni se borran. Códigos de salida < 8 = OK.
+    robocopy $PSScriptRoot $destino /E /R:2 /W:2 /NP /NFL /NDL /NJH /NJS /XF sinnersrelatos.db sinnersrelatos.db-shm sinnersrelatos.db-wal sunat.json *.pfx | Out-Null
     if ($LASTEXITCODE -ge 8) {
         throw "No se pudieron copiar los archivos a $destino (robocopy devolvió $LASTEXITCODE)."
     }
