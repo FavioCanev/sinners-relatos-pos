@@ -30,7 +30,7 @@ public static class ComprobanteHtml
         }
 
         var script = autoprint ? "<script>window.onload = function () { window.print(); };</script>" : "";
-        var botonManual = autoprint ? "" : "<button class=\"no-print\" onclick=\"window.print()\">🖨️ Imprimir / Guardar PDF</button>";
+        var botonManual = autoprint ? "" : "<button class=\"no-print\" onclick=\"window.print()\">Imprimir / Guardar PDF</button>";
 
         const string estilos = """
             body { font-family: 'Courier New', monospace; margin: 0; padding: 16px; color: #111; background: #fff; }

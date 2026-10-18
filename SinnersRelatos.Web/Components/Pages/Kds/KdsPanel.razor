@@ -12,7 +12,7 @@
         <div class="d-flex align-items-center gap-3">
             <label class="estacion-toggle">
                 <input type="checkbox" checked="@esEstacionImpresion" @onchange="ToggleEstacionImpresionAsync" />
-                🖨️ Impresora conectada aquí
+                <Icono Nombre="impresora" /> Impresora conectada aquí
             </label>
         </div>
     </div>
@@ -20,7 +20,7 @@
     @foreach (var solicitud in registroImpresiones)
     {
         <div class="kds-impresion">
-            <span>@(solicitud.Impresa ? "🖨️ Imprimiendo" : "ℹ️") comprobante de @solicitud.Solicitud.MesaEtiqueta @(solicitud.Impresa ? "..." : "(esta pantalla no tiene la impresora)")</span>
+            <span><Icono Nombre="@(solicitud.Impresa ? "impresora" : "info")" /> @(solicitud.Impresa ? "Imprimiendo" : "") comprobante de @solicitud.Solicitud.MesaEtiqueta @(solicitud.Impresa ? "..." : "(esta pantalla no tiene la impresora)")</span>
             <button class="btn btn-sm btn-outline-light" @onclick="() => registroImpresiones.Remove(solicitud)">✕</button>
         </div>
     }
@@ -34,7 +34,7 @@
         <div class="kds-columnas">
             <div class="kds-columna kds-columna-recibido">
                 <div class="kds-columna-header">
-                    <span class="kds-columna-titulo">📥 Recibido</span>
+                    <span class="kds-columna-titulo"><Icono Nombre="bandeja" /> Recibido</span>
                     <span class="kds-columna-contador">@recibidos.Count</span>
                 </div>
                 <div class="kds-columna-scroll">
@@ -58,7 +58,7 @@
                                             {
                                                 <div class="kds-item-mods">@string.Join(", ", item.Modificadores)</div>
                                             }
-                                            <div class="kds-item-tiempo">⏱ @FormateoTiempo.TiempoTranscurrido(item.FechaCreacion)</div>
+                                            <div class="kds-item-tiempo"><Icono Nombre="reloj" /> @FormateoTiempo.TiempoTranscurrido(item.FechaCreacion)</div>
                                         </div>
                                         <button class="btn btn-sm kds-btn-recibido" @onclick="() => MarcarEnPreparacionAsync(item.DetallePedidoId)">Recibido</button>
                                     </div>
@@ -71,7 +71,7 @@
 
             <div class="kds-columna kds-columna-preparacion">
                 <div class="kds-columna-header">
-                    <span class="kds-columna-titulo">👨‍🍳 En preparación</span>
+                    <span class="kds-columna-titulo"><Icono Nombre="fuego" /> En preparación</span>
                     <span class="kds-columna-contador">@enPreparacion.Count</span>
                 </div>
                 <div class="kds-columna-scroll">
@@ -95,9 +95,9 @@
                                             {
                                                 <div class="kds-item-mods">@string.Join(", ", item.Modificadores)</div>
                                             }
-                                            <div class="kds-item-tiempo">⏱ @FormateoTiempo.TiempoTranscurrido(item.FechaCambioEstado ?? item.FechaCreacion)</div>
+                                            <div class="kds-item-tiempo"><Icono Nombre="reloj" /> @FormateoTiempo.TiempoTranscurrido(item.FechaCambioEstado ?? item.FechaCreacion)</div>
                                         </div>
-                                        <button class="btn btn-sm btn-success" @onclick="() => MarcarListoAsync(item.DetallePedidoId)">✓ Listo</button>
+                                        <button class="btn btn-sm btn-success" @onclick="() => MarcarListoAsync(item.DetallePedidoId)"><Icono Nombre="check" /> Listo</button>
                                     </div>
                                 }
                             </div>
@@ -108,7 +108,7 @@
 
             <div class="kds-columna kds-columna-listo">
                 <div class="kds-columna-header">
-                    <span class="kds-columna-titulo">✅ Listo</span>
+                    <span class="kds-columna-titulo"><Icono Nombre="check-circulo" /> Listo</span>
                     <span class="kds-columna-contador">@listos.Count</span>
                 </div>
                 <div class="kds-columna-scroll">
@@ -132,7 +132,7 @@
                                             {
                                                 <div class="kds-item-mods">@string.Join(", ", item.Modificadores)</div>
                                             }
-                                            <div class="kds-item-tiempo">⏱ @FormateoTiempo.TiempoTranscurrido(item.FechaCambioEstado ?? item.FechaCreacion)</div>
+                                            <div class="kds-item-tiempo"><Icono Nombre="reloj" /> @FormateoTiempo.TiempoTranscurrido(item.FechaCambioEstado ?? item.FechaCreacion)</div>
                                         </div>
                                     </div>
                                 }

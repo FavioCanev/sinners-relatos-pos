@@ -74,7 +74,6 @@
 .rail-item.active {
     background: var(--brand-primary);
     color: #fff;
-    box-shadow: 0 8px 20px rgba(101, 6, 16, 0.45);
 }
 
 .rail-icono {

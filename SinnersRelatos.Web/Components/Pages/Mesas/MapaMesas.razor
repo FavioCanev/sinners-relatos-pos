@@ -86,7 +86,7 @@ else
                         @if (mostrarTiempo)
                         {
                             <g>
-                                <text x="@(x + w / 2)" y="@(y + h / 2 + 13)" class="mesa-tiempo" text-anchor="middle" dominant-baseline="middle">⏱ @FormateoTiempo.TiempoTranscurrido(mesaEstado.OcupadaDesde!.Value)</text>
+                                <text x="@(x + w / 2)" y="@(y + h / 2 + 13)" class="mesa-tiempo" text-anchor="middle" dominant-baseline="middle">@FormateoTiempo.TiempoTranscurrido(mesaEstado.OcupadaDesde!.Value)</text>
                             </g>
                         }
                     </g>

@@ -32,7 +32,7 @@ else
                 @usuario?.NombreCompleto
                 @if (TiempoActivoDesde is { } activaDesde)
                 {
-                    <span class="tiempo-activo" title="Tiempo desde el primer ítem confirmado">⏱ @FormateoTiempo.TiempoTranscurrido(activaDesde)</span>
+                    <span class="tiempo-activo" title="Tiempo desde el primer ítem confirmado"><Icono Nombre="reloj" /> @FormateoTiempo.TiempoTranscurrido(activaDesde)</span>
                 }
             </div>
         </div>
@@ -90,11 +90,11 @@ else
                                 @d.Cantidad x @d.Producto.Nombre @(d.Modificadores.Count > 0 ? $"({string.Join(", ", d.Modificadores.Select(m => m.OpcionModificador.Nombre))})" : "")
                                 @if (d.Estado == EstadoDetallePedido.Listo)
                                 {
-                                    <span class="badge-listo">✅ Listo para recoger</span>
+                                    <span class="badge-listo"><Icono Nombre="check" /> Listo para recoger</span>
                                 }
                                 else if (d.Estado == EstadoDetallePedido.EnPreparacion)
                                 {
-                                    <span class="badge-preparacion">👨‍🍳 En preparación</span>
+                                    <span class="badge-preparacion"><Icono Nombre="fuego" /> En preparación</span>
                                 }
                             </span>
                             @if (detalleEliminando != d.Id)
@@ -117,9 +117,9 @@ else
                 }
             </ul>
             <div class="d-flex gap-2 mt-2">
-                <a class="btn btn-sm btn-outline-secondary" href="/print/comprobante/@(pedido!.Id)?autoprint=false" target="_blank">🧾 Ver / Guardar PDF</a>
+                <a class="btn btn-sm btn-outline-secondary" href="/print/comprobante/@(pedido!.Id)?autoprint=false" target="_blank"><Icono Nombre="recibo" /> Ver / Guardar PDF</a>
                 <button class="btn btn-sm btn-outline-secondary" @onclick="SolicitarImpresionAsync" disabled="@solicitandoImpresion">
-                    🖨️ @(solicitandoImpresion ? "Enviando..." : "Imprimir en cocina/barra")
+                    <Icono Nombre="impresora" /> @(solicitandoImpresion ? "Enviando..." : "Imprimir en cocina/barra")
                 </button>
             </div>
             @if (impresionSolicitada)
@@ -175,7 +175,7 @@ else
                 {
                     var esMixto = preset.Productos.Select(pp => pp.Producto.Marca).Distinct().Count() > 1;
                     <div class="producto-card preset-card">
-                        <button class="preset-editar" title="Editar combo" @onclick="() => AbrirEditarPreset(preset)">✎</button>
+                        <button class="preset-editar" title="Editar combo" aria-label="Editar combo" @onclick="() => AbrirEditarPreset(preset)"><Icono Nombre="lapiz" /></button>
                         <div class="preset-agregar" @onclick="() => AgregarPresetAlCarrito(preset)">
                             <span class="producto-nombre">@preset.Nombre</span>
                             <span class="producto-precio">S/ @preset.PrecioTotal.ToString("0.00")</span>
@@ -532,7 +532,6 @@ else
         background: var(--brand-primary);
         border-color: var(--brand-primary-border);
         color: #fff;
-        box-shadow: 0 6px 16px rgba(101, 6, 16, 0.35);
     }
 
     .categoria-chips {
@@ -791,7 +790,7 @@ else
             {
                 <div class="linea-carrito">
                     <div class="flex-grow-1">
-                        <div>@linea.Producto.Nombre @(linea.ForzarVenta ? "⚠" : "")</div>
+                        <div>@linea.Producto.Nombre @if (linea.ForzarVenta) { <span class="text-warning" title="Venta forzada sin stock"><Icono Nombre="alerta" /></span> }</div>
                         @if (linea.OpcionesSeleccionadas.Count > 0)
                         {
                             <small class="text-muted">@string.Join(", ", linea.OpcionesSeleccionadas.Select(o => o.Nombre))</small>

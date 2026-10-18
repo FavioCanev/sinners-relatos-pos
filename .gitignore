@@ -33,3 +33,8 @@ Thumbs.db
 
 # Salida generada por deploy/publicar.ps1
 deploy/publicado/
+# Comprimidos del paquete publicado (para copiarlo a otra PC)
+deploy/*.zip
+
+# Análisis de graphify (se regenera)
+graphify-out/
