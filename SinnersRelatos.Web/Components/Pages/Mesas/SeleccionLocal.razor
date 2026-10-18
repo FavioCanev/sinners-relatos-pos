@@ -30,11 +30,12 @@
     }
 
     .local-card {
-        border: none;
-        border-radius: 0.75rem;
+        border: 1px solid var(--brand-primary-border);
+        border-radius: var(--radio);
         padding: 2rem 1.5rem;
         color: #fff;
         background-color: var(--brand-primary);
+        box-shadow: 0 10px 28px rgba(101, 6, 16, 0.4);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -49,7 +50,12 @@
     }
 
     .local-relatos {
-        background-color: var(--brand-secondary-dark);
+        background-color: var(--surface-1);
+        box-shadow: none;
+    }
+
+    .local-relatos:hover {
+        background-color: var(--surface-2);
     }
 
     .local-nombre {

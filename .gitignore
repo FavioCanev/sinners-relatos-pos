@@ -19,10 +19,10 @@ obj/
 # Rider
 .idea/
 
-# EF Core
-*.mdf
-*.ldf
-*.ndf
+# EF Core / SQLite
+*.db
+*.db-shm
+*.db-wal
 
 # OS files
 .DS_Store
@@ -30,3 +30,6 @@ Thumbs.db
 
 # Claude Code project state
 .claude/
+
+# Salida generada por deploy/publicar.ps1
+deploy/publicado/

@@ -1,47 +1,232 @@
+@font-face { font-family: 'Barlow'; src: url('fonts/barlow-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('fonts/barlow-500.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('fonts/barlow-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Barlow'; src: url('fonts/barlow-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+
+/* Paleta única de la app: tema oscuro sobre el bordó de Sinners. --brand-primary (#650610) es
+   el color de relleno de botones y del ítem activo; sobre fondo oscuro es demasiado oscuro para
+   textos e íconos finos, así que para eso se usa --brand-accent, el mismo tono más claro. */
 :root {
     --brand-primary: #650610;
-    --brand-primary-dark: #45040b;
-    --brand-secondary: #b8863b;
-    --brand-secondary-dark: #96692a;
-    --brand-bg-alt: #f7f5f3;
+    --brand-primary-dark: #4a040c;
+    --brand-primary-hover: #7a0915;
+    --brand-primary-border: #8a1424;
+    --brand-accent: #e06373;
+    --brand-soft: #3a1219;
+
+    --surface-0: #141216;
+    --surface-1: #1d1a1f;
+    --surface-2: #26222a;
+    --surface-3: #312c35;
+    --line: #3a343e;
+    --text: #f2edee;
+    --text-muted: #a79fa4;
+
+    --estado-ok: #5cbf8a;
+    --estado-ok-soft: #1c3328;
+    --estado-alerta: #e0a548;
+    --estado-alerta-soft: #3a2e17;
+    --estado-error: #ef5f5f;
+
+    --radio: 0.75rem;
+    --radio-sm: 0.5rem;
+
+    /* Compatibilidad: estilos de páginas que todavía usan los nombres anteriores. */
+    --brand-secondary: var(--brand-accent);
+    --brand-secondary-dark: var(--brand-accent);
+    --brand-bg-alt: var(--surface-2);
+}
+
+[data-bs-theme=dark] {
+    --bs-body-bg: var(--surface-0);
+    --bs-body-bg-rgb: 20, 18, 22;
+    --bs-body-color: var(--text);
+    --bs-body-color-rgb: 242, 237, 238;
+    --bs-secondary-color: var(--text-muted);
+    --bs-tertiary-bg: var(--surface-2);
+    --bs-secondary-bg: var(--surface-2);
+    --bs-border-color: var(--line);
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.08);
+    --bs-emphasis-color: #fff;
+    --bs-heading-color: var(--text);
+    --bs-link-color: var(--brand-accent);
+    --bs-link-color-rgb: 224, 99, 115;
+    --bs-link-hover-color: #ec8794;
+    --bs-primary: var(--brand-primary);
+    --bs-primary-rgb: 101, 6, 16;
+    --bs-primary-text-emphasis: var(--brand-accent);
+    --bs-primary-bg-subtle: var(--brand-soft);
+    --bs-primary-border-subtle: var(--brand-primary-border);
+    --bs-success-rgb: 92, 191, 138;
+    --bs-danger-rgb: 239, 95, 95;
+    --bs-warning-rgb: 224, 165, 72;
+    --bs-font-sans-serif: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    --bs-border-radius: var(--radio-sm);
+    --bs-border-radius-lg: var(--radio);
+    color-scheme: dark;
 }
 
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    background: var(--surface-0);
+    color: var(--text);
+}
+
+h1, h2, h3, h4, h5 {
+    font-weight: 600;
+    letter-spacing: 0.01em;
 }
 
 a, .btn-link {
-    color: var(--brand-primary);
+    color: var(--brand-accent);
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Botones */
+.btn {
+    font-weight: 600;
+    border-radius: var(--radio-sm);
 }
 
 .btn-primary {
-    color: #fff;
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--brand-primary);
+    --bs-btn-border-color: var(--brand-primary-border);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--brand-primary-hover);
+    --bs-btn-hover-border-color: var(--brand-primary-border);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--brand-primary-dark);
+    --bs-btn-active-border-color: var(--brand-primary-border);
+    --bs-btn-disabled-color: rgba(255, 255, 255, 0.6);
+    --bs-btn-disabled-bg: var(--brand-primary-dark);
+    --bs-btn-disabled-border-color: var(--brand-primary-dark);
+    box-shadow: 0 6px 18px rgba(101, 6, 16, 0.35);
+}
+
+.btn-secondary, .btn-outline-secondary, .btn-outline-primary {
+    --bs-btn-color: var(--brand-accent);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: var(--brand-primary-border);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--brand-primary);
+    --bs-btn-hover-border-color: var(--brand-primary-border);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--brand-primary-dark);
+    --bs-btn-active-border-color: var(--brand-primary-border);
+    --bs-btn-disabled-color: var(--text-muted);
+    --bs-btn-disabled-border-color: var(--line);
+}
+
+.btn-success {
+    --bs-btn-color: #0f1f16;
+    --bs-btn-bg: var(--estado-ok);
+    --bs-btn-border-color: var(--estado-ok);
+    --bs-btn-hover-color: #0f1f16;
+    --bs-btn-hover-bg: #74cd9c;
+    --bs-btn-hover-border-color: #74cd9c;
+}
+
+.btn:focus-visible, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-select:focus, .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(224, 99, 115, 0.35);
+    border-color: var(--brand-accent);
+}
+
+/* Formularios */
+.form-control, .form-select {
+    background-color: var(--surface-2);
+    border-color: var(--line);
+    color: var(--text);
+}
+
+.form-control::placeholder {
+    color: var(--text-muted);
+}
+
+.form-check-input:checked {
     background-color: var(--brand-primary);
-    border-color: var(--brand-primary);
+    border-color: var(--brand-primary-border);
 }
 
-.btn-primary:hover, .btn-primary:active {
-    background-color: var(--brand-primary-dark);
-    border-color: var(--brand-primary-dark);
+/* Tablas */
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--text);
+    --bs-table-border-color: var(--line);
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.025);
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
 }
 
-.btn-secondary, .btn-outline-secondary {
-    color: var(--brand-secondary-dark);
-    border-color: var(--brand-secondary);
+.table > thead th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.85rem;
 }
 
-.btn-secondary:hover, .btn-outline-secondary:hover {
-    color: #fff;
-    background-color: var(--brand-secondary);
-    border-color: var(--brand-secondary);
+/* Tarjetas, alertas y badges */
+.card {
+    --bs-card-bg: var(--surface-1);
+    --bs-card-border-color: var(--line);
+    --bs-card-border-radius: var(--radio);
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem var(--brand-secondary);
+.alert-danger {
+    --bs-alert-bg: #3a1618;
+    --bs-alert-color: #ffb4b4;
+    --bs-alert-border-color: #5c2226;
+}
+
+.alert-success {
+    --bs-alert-bg: var(--estado-ok-soft);
+    --bs-alert-color: #a9e6c4;
+    --bs-alert-border-color: #2b4d3c;
+}
+
+.alert-warning {
+    --bs-alert-bg: var(--estado-alerta-soft);
+    --bs-alert-color: #f2cc8a;
+    --bs-alert-border-color: #5a4622;
+}
+
+.alert-info, .alert-secondary {
+    --bs-alert-bg: var(--surface-2);
+    --bs-alert-color: var(--text);
+    --bs-alert-border-color: var(--line);
+}
+
+/* Pestañas de módulo (ver NavModulo): subrayado bordó como en el diseño de referencia. */
+.tabs-modulo {
+    display: flex;
+    gap: 1.75rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tabs-modulo a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    padding: 0.6rem 0;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+}
+
+.tabs-modulo a:hover {
+    color: var(--text);
+}
+
+.tabs-modulo a.active {
+    color: var(--brand-accent);
+    border-bottom-color: var(--brand-accent);
 }
 
 .content {
-    padding-top: 1.1rem;
+    padding-top: 1.25rem;
 }
 
 h1:focus {
@@ -49,15 +234,15 @@ h1:focus {
 }
 
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--estado-ok);
 }
 
 .invalid {
-    outline: 1px solid #e50000;
+    outline: 1px solid var(--estado-error);
 }
 
 .validation-message {
-    color: #e50000;
+    color: var(--estado-error);
 }
 
 .blazor-error-boundary {
@@ -90,7 +275,7 @@ h1:focus {
 .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.6);
     display: flex;
     align-items: flex-start;
     justify-content: center;
@@ -100,12 +285,13 @@ h1:focus {
 }
 
 .panel-modal {
-    background: #fff;
+    background: var(--surface-1);
+    border: 1px solid var(--line);
     width: 100%;
     max-width: 640px;
     max-height: calc(100vh - 4rem);
     overflow-y: auto;
-    border-radius: 0.75rem;
+    border-radius: var(--radio);
     padding: 1.25rem;
     margin: auto;
 }

@@ -147,8 +147,6 @@
 
 <style>
     .kds-panel {
-        padding: 1rem;
-        height: 100%;
         display: flex;
         flex-direction: column;
     }
@@ -156,22 +154,22 @@
     .kds-header {
         display: flex;
         justify-content: space-between;
-        align-items: baseline;
-        border-bottom: 3px solid var(--kds-color);
-        padding-bottom: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
         margin-bottom: 1rem;
         flex-shrink: 0;
     }
 
     .kds-header h1 {
-        color: var(--kds-color);
         margin: 0;
+        font-size: 1.75rem;
     }
 
     .kds-vacio {
         text-align: center;
         font-size: 1rem;
-        color: #999;
+        color: var(--text-muted);
         margin-top: 2rem;
     }
 
@@ -179,16 +177,15 @@
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1rem;
-        flex: 1;
-        min-height: 0;
     }
 
     .kds-columna {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        background: #f4f4f4;
-        border-radius: 0.6rem;
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radio);
         overflow: hidden;
     }
 
@@ -196,57 +193,66 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.6rem 0.9rem;
+        padding: 0.85rem 1rem;
         font-weight: 700;
-        color: #fff;
+        font-size: 1.05rem;
+        border-bottom: 1px solid var(--line);
         flex-shrink: 0;
     }
 
-    .kds-columna-recibido .kds-columna-header {
-        background: #b7472a;
-    }
-
-    .kds-columna-preparacion .kds-columna-header {
-        background: #b8863b;
-    }
-
-    .kds-columna-listo .kds-columna-header {
-        background: #3c8a5b;
-    }
-
     .kds-columna-contador {
-        background: rgba(255, 255, 255, 0.25);
         border-radius: 1rem;
-        padding: 0.1rem 0.6rem;
+        padding: 0.1rem 0.65rem;
         font-size: 0.85rem;
+        font-weight: 700;
+    }
+
+    .kds-columna-recibido .kds-columna-contador {
+        background: var(--brand-soft);
+        color: var(--brand-accent);
+    }
+
+    .kds-columna-preparacion .kds-columna-contador {
+        background: var(--estado-alerta-soft);
+        color: var(--estado-alerta);
+    }
+
+    .kds-columna-listo .kds-columna-contador {
+        background: var(--estado-ok-soft);
+        color: var(--estado-ok);
     }
 
     .kds-columna-scroll {
         flex: 1;
         min-height: 0;
         overflow-y: auto;
-        padding: 0.75rem;
+        padding: 0.85rem;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
     }
 
     .kds-ticket {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-top: 4px solid var(--kds-color);
-        border-radius: 0.5rem;
-        padding: 0.75rem;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--brand-primary-border);
+        border-radius: var(--radio-sm);
+        padding: 0.75rem 0.9rem;
+    }
+
+    .kds-columna-preparacion .kds-ticket {
+        border-left-color: var(--estado-alerta);
     }
 
     .kds-ticket-listo {
-        opacity: 0.85;
+        border-left-color: var(--estado-ok);
+        opacity: 0.8;
     }
 
     .kds-ticket-header {
         font-weight: 700;
         font-size: 1.1rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.4rem;
     }
 
     .kds-item {
@@ -254,8 +260,8 @@
         justify-content: space-between;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.4rem 0;
-        border-bottom: 1px dashed #eee;
+        padding: 0.45rem 0;
+        border-bottom: 1px dashed var(--line);
     }
 
     .kds-item:last-child {
@@ -264,30 +270,37 @@
 
     .kds-item-cantidad {
         font-weight: 700;
+        color: var(--brand-accent);
     }
 
     .kds-item-mods {
-        font-size: 0.75rem;
-        color: #777;
+        font-size: 0.8rem;
+        color: var(--text-muted);
     }
 
     .kds-item-tiempo {
-        font-size: 0.72rem;
-        color: #999;
+        font-size: 0.75rem;
+        color: var(--text-muted);
         margin-top: 0.15rem;
     }
 
     .kds-btn-recibido {
-        background: var(--kds-color);
+        background: var(--brand-primary);
+        border: 1px solid var(--brand-primary-border);
         color: #fff;
-        border: none;
         white-space: nowrap;
     }
 
-    .kds-impresion {
-        background: var(--kds-color);
+    .kds-btn-recibido:hover {
+        background: var(--brand-primary-hover);
         color: #fff;
-        border-radius: 0.5rem;
+    }
+
+    .kds-impresion {
+        background: var(--brand-soft);
+        border: 1px solid var(--brand-primary-border);
+        color: var(--text);
+        border-radius: var(--radio-sm);
         padding: 0.6rem 0.9rem;
         display: flex;
         justify-content: space-between;
@@ -301,11 +314,22 @@
     .estacion-toggle {
         display: flex;
         align-items: center;
-        gap: 0.35rem;
-        font-size: 0.82rem;
-        color: #666;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        background: var(--surface-1);
+        border: 1px solid var(--line);
+        border-radius: var(--radio-sm);
+        padding: 0.4rem 0.75rem;
         cursor: pointer;
         user-select: none;
+    }
+
+    /* Cada columna ocupa el alto de la pantalla y tiene su propio scroll: lo más nuevo arriba. */
+    @@media (min-width: 901px) {
+        .kds-columnas {
+            height: calc(100vh - 12rem);
+        }
     }
 
     /* En pantallas angostas las tres columnas no entran una al lado de la otra: se apilan y
@@ -314,11 +338,6 @@
     @@media (max-width: 900px) {
         .kds-columnas {
             grid-template-columns: 1fr;
-            overflow-y: auto;
-        }
-
-        .kds-columna {
-            flex: none;
         }
 
         .kds-columna-scroll {

@@ -1,0 +1,15 @@
+@* Pestañas para moverse entre las páginas de un mismo módulo del menú lateral. *@
+@if (ModulosNavegacion.PorClave(Clave) is { Paginas.Count: > 1 } modulo)
+{
+    <nav class="tabs-modulo">
+        @foreach (var pagina in modulo.Paginas)
+        {
+            <NavLink href="@pagina.Href" Match="NavLinkMatch.All">@pagina.Titulo</NavLink>
+        }
+    </nav>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Clave { get; set; } = "";
+}

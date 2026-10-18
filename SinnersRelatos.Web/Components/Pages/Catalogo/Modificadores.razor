@@ -8,6 +8,7 @@
 @inject IIngredienteService IngredienteService
 
 <PageTitle>Modificadores</PageTitle>
+<NavModulo Clave="catalogo" />
 
 <h1>Grupos de Modificadores</h1>
 
@@ -146,7 +147,7 @@ else
                                 @if (opcionRecetaExpandidaId == opcion.Id)
                                 {
                                     <tr>
-                                        <td colspan="4" class="bg-light">
+                                        <td colspan="4" class="bg-body-tertiary">
                                             @{
                                                 var porDefecto = opcion.Recetas.Where(r => r.ProductoId is null).ToList();
                                                 var porProducto = opcion.Recetas.Where(r => r.ProductoId is not null)
